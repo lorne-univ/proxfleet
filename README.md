@@ -7,7 +7,14 @@ The proxmoxer api is mainly used.
 
 class ProxmoxManager
 
+## Virtual environment
+python -m venv venv
+\proxfleet> .\venv\Scripts\Activate.ps1
+
+
 ## Environment variables
 To set in .env file
+```
 PROXMOX_USER=root@pam
 PROXMOX_PASSWORD=XXXX
+```
