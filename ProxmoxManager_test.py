@@ -217,12 +217,12 @@ if __name__ == "__main__":
     #     vlan_id=170,
     # )
 
-    # test_get_network_interfaces(
-    #     proxmox_user=proxmox_user,
-    #     proxmox_pass=proxmox_pass,
-    #     serveur_name=target_host,
-    #     vlan="140",
-    # )
+    test_get_network_interfaces(
+        proxmox_user=proxmox_user,
+        proxmox_pass=proxmox_pass,
+        serveur_name=target_host,
+        vlan="140",
+    )
 
     # test_add_net_vmbr(
     #     proxmox_user=proxmox_user,
@@ -258,9 +258,9 @@ if __name__ == "__main__":
     #     path="/mnt/pve/nas-tri/dump/",
     # )
 
-    test_delete_vm(
-        proxmox_user=proxmox_user,
-        proxmox_pass=proxmox_pass,
-        serveur_name=target_host,
-        vmid=103,
-    )
+    # test_delete_vm(
+    #     proxmox_user=proxmox_user,
+    #     proxmox_pass=proxmox_pass,
+    #     serveur_name=target_host,
+    #     vmid=103,
+    # )
