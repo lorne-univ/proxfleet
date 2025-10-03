@@ -2,16 +2,6 @@ import os
 from proxmoxer import ProxmoxAPI
 import logging
 
-VLAN_INTERFACE = {
-    "pm-serv16.local.univ-savoie.fr": "eno1",
-    "pm-serv17.local.univ-savoie.fr": "eno1",
-    "pm-serv18.local.univ-savoie.fr": "ens10f0",
-    "pm-serv19.local.univ-savoie.fr": "ens10f0",
-    "pm-serv20.local.univ-savoie.fr": "ens10f0",
-    "pm-serv21.local.univ-savoie.fr": "ens15f1np1",
-    "pm-serv22.local.univ-savoie.fr": "ens15f1np1",
-}
-
 
 class ProxmoxManager:
     def __init__(self, host, proxmox_admin, proxmox_admin_password):
