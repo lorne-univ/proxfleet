@@ -8,9 +8,11 @@ The proxmoxer api is mainly used.
 class ProxmoxManager
 
 ## Virtual environment
+```
+#In proxfleet directory
 python -m venv venv
 \proxfleet> .\venv\Scripts\Activate.ps1
-
+```
 
 ## Environment variables
 To set in .env file
