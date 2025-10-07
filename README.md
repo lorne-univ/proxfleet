@@ -20,3 +20,8 @@ To set in .env file
 PROXMOX_USER=root@pam
 PROXMOX_PASSWORD=XXXX
 ```
+
+## Informations
+
+The Python library used is **proxmoxer**.  
+The Proxmox API documentation is available here: [Proxmox API Documentation](https://pve.proxmox.com/pve-docs/api-viewer/index.html)
