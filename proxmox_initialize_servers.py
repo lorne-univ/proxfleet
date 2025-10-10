@@ -1,6 +1,6 @@
 import yaml
 import logging
-from ProxmoxManager import ProxmoxManager
+from proxmox_manager import ProxmoxManager
 import os
 import dotenv
 
