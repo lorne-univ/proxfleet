@@ -30,7 +30,6 @@ def pytest_generate_tests(metafunc):
 
 @pytest.mark.parametrize("vlan", ["140", "170"])
 class TestProxmoxManager:
-    # Tests les méthodes de ProxmoxManager sur chaque hyperviseur
 
     def test_get_network_interfaces(self, proxmox_host, proxmox_auth, vlan):
         # Vérifie que les VLANs spécifiés sont présents sur chaque hyperviseur

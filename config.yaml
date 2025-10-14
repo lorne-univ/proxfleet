@@ -3,7 +3,7 @@
 servers:
   - host: pm-serv16
     local: pm-serv16.local.univ-savoie.fr
-    usmb-tri: pm-serv16.local.usmb-tri.fr
+    usmb-tri: pm-serv16.usmb-tri.fr
     sssd_file_path: /etc/sssd/conf.d/sssd.conf
     vlan_interface: "eno1"
   # - host: pm-serv17
@@ -13,26 +13,26 @@ servers:
   #   vlan_interface: "eno1"
   - host: pm-serv18
     local: pm-serv18.local.univ-savoie.fr
-    usmb-tri: pm-serv18.local.usmb-tri.fr
+    usmb-tri: pm-serv18.usmb-tri.fr
     sssd_file_path: /etc/sssd/conf.d/sssd.conf
     vlan_interface: "eno1"
   - host: pm-serv19
     local: pm-serv19.local.univ-savoie.fr
-    usmb-tri: pm-serv19.local.usmb-tri.fr
+    usmb-tri: pm-serv19.usmb-tri.fr
     sssd_file_path: /etc/sssd/conf.d/sssd.conf
     vlan_interface: "ens10f0"
   - host: pm-serv20
     local: pm-serv20.local.univ-savoie.fr
-    usmb-tri: pm-serv20.local.usmb-tri.fr
+    usmb-tri: pm-serv20.usmb-tri.fr
     sssd_file_path: /etc/sssd/conf.d/sssd.conf
     vlan_interface: "ens10f0"
   - host: pm-serv21
     local: pm-serv21.local.univ-savoie.fr
-    usmb-tri: pm-serv21.local.usmb-tri.fr
+    usmb-tri: pm-serv21.usmb-tri.fr
     sssd_file_path: /etc/sssd/conf.d/sssd.conf
     vlan_interface: "ens15f1np1"
   - host: pm-serv22
     local: pm-serv22.local.univ-savoie.fr
-    usmb-tri: pm-serv22.local.usmb-tri.fr
+    usmb-tri: pm-serv22.usmb-tri.fr
     sssd_file_path: /etc/sssd/conf.d/sssd.conf
     vlan_interface: "ens15f1np1"
