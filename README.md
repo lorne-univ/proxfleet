@@ -71,6 +71,22 @@ Create a Pull Request (PR):
 
 PRs must be reviewed and approved by me before merging into `main`.
 
+After the pull request has been approved, delete the local branch:
+```
+git branch -d feature/<your-feature-name>
+```
+
+Delete the remote branch:
+```
+git push origin --delete feature/<your-feature-name>
+```
+
+Switch back to main and update it:
+```
+git checkout main
+git pull origin main
+```
+
 ### Useful Git Commands
 
 | Command | Description | Example |
