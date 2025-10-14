@@ -1,26 +1,40 @@
 import os
+import yaml
+import pytest
 from dotenv import load_dotenv
 from proxmox_manager import ProxmoxManager
 
-# Charger les variables d'environnement depuis le fichier .env
-load_dotenv()
+@pytest.fixture(scope="session")
+def proxmox_auth():
+    # Charge les identifiants Proxmox (une seule fois pour la session)
+    load_dotenv()
+    proxmox_user = os.getenv("PROXMOX_USER")
+    proxmox_password = os.getenv("PROXMOX_PASSWORD")
+    if not proxmox_user or not proxmox_password:
+        pytest.fail("Variables d'environnement PROXMOX_USER / PROXMOX_PASSWORD manquantes.")
+    return proxmox_user, proxmox_password
 
-# Récupérer les informations du fichier .env
-proxmox_host = os.getenv('PROXMOX_HOST')
-proxmox_user = os.getenv('PROXMOX_USER')
-proxmox_password = os.getenv('PROXMOX_PASSWORD')
+def pytest_generate_tests(metafunc):
+    # Génère automatiquement un test pour chaque hyperviseur défini dans config.yaml
+    if "proxmox_host" in metafunc.fixturenames:
+        with open("config.yaml", "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+        proxmox_hosts = []
+        for server in config.get("servers", []):
+            proxmox_host = server.get("usmb-tri")
+            if proxmox_host:
+                proxmox_hosts.append(proxmox_host)
+        if not proxmox_hosts:
+            pytest.skip("Aucun hyperviseur trouvé dans config.yaml (clé 'usmb-tri').")
+        metafunc.parametrize("proxmox_host", proxmox_hosts)
 
-# Classe pour tester les méthodes ProxmoxManager
+@pytest.mark.parametrize("vlan", ["140", "170"])
 class TestProxmoxManager:
+    # Tests les méthodes de ProxmoxManager sur chaque hyperviseur
 
-    def test_ok_get_network_interfaces(self):
-        # On teste qu'on reçoive bien une liste d'interfaces réseau
+    def test_get_network_interfaces(self, proxmox_host, proxmox_auth, vlan):
+        # Vérifie que les VLANs spécifiés sont présents sur chaque hyperviseur
+        proxmox_user, proxmox_password = proxmox_auth
         proxmox_manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
-        interfaces = proxmox_manager.get_network_interfaces(vlan="all")
-        assert len(interfaces) > 0, "La liste des interfaces ne doit pas être vide"
-    
-    def test_nok_get_network_interfaces(self):
-        # On teste qu'on reçoive pas de liste car le vlan 150 n'existe pas
-        proxmox_manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
-        interfaces = proxmox_manager.get_network_interfaces(vlan="150")
-        assert len(interfaces) > 0, "La liste des interfaces ne doit pas être vide"
+        resultat = proxmox_manager.get_network_interfaces(vlan=vlan)
+        assert len(resultat) > 0, f"{proxmox_host}: aucune interface trouvée pour VLAN {vlan}"
