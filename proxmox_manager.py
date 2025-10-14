@@ -12,7 +12,7 @@ class ProxmoxManager:
         """
         self.host = host
         self.proxmox = ProxmoxAPI(
-            host, user=proxmox_admin, password=proxmox_admin_password, verify_ssl=False
+            host, user=proxmox_admin, password=proxmox_admin_password, verify_ssl=True
         )
 
     def liste_vms(self):
@@ -333,3 +333,4 @@ class ProxmoxManager:
     def delete_vm(self, vmid):
         node = self.proxmox.nodes.get()[0]["node"]
         self.proxmox.nodes(node).qemu(vmid).delete()
+
