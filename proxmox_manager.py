@@ -1,6 +1,6 @@
 import os
-from proxmoxer import ProxmoxAPI
 import logging
+from proxmoxer import ProxmoxAPI
 
 
 class ProxmoxManager:
@@ -11,9 +11,7 @@ class ProxmoxManager:
         host: proxmox server hostname or IP
         """
         self.host = host
-        self.proxmox = ProxmoxAPI(
-            host, user=proxmox_admin, password=proxmox_admin_password, verify_ssl=False
-        )
+        self.proxmox = ProxmoxAPI(host, user=proxmox_admin, password=proxmox_admin_password, verify_ssl=True)
 
     def liste_vms(self):
         """
@@ -22,10 +20,6 @@ class ProxmoxManager:
         """
         node = self.proxmox.nodes.get()[0]["node"]
         return self.proxmox.nodes(node).qemu.get()
-
-    def start_vm(self, vmid):
-        node = self.proxmox.nodes.get()[0]["node"]
-        return self.proxmox.nodes(node).qemu(vmid).status.start.post()
 
     def list_users(self):
         """
@@ -329,7 +323,3 @@ class ProxmoxManager:
             archive=f"{path}{backup_file}",
         )
         logging.info(f"Backup {backup_file} restored on {self.host}.")
-
-    def delete_vm(self, vmid):
-        node = self.proxmox.nodes.get()[0]["node"]
-        self.proxmox.nodes(node).qemu(vmid).delete()
