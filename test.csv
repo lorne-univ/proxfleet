@@ -1,0 +1,5 @@
+target_host,vm_name,template_vmid,pool,storage,newid,net0,net1,ipv4,status
+pm-serv22,vm-etudiant-A,500,durandth,data,,vmbrdurandth1,vmbrdurandth2,,
+pm-serv22,vm-etudiant-B,501,durandth,data,201,,,,
+pm-serv22,vm-etudiant-C,502,florn,data,202,,,,
+pm-serv22,vm-etudiant-D,510,florn,data,203,,,,
