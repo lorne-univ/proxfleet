@@ -13,7 +13,7 @@ class ProxmoxManager:
         self.host = host
         self.proxmox = ProxmoxAPI(host, user=proxmox_admin, password=proxmox_admin_password, verify_ssl=True)
 
-    def liste_vms(self):
+    def list_vms(self):
         """
         List all VMs on the Proxmox server.
         Each server has only one node.
@@ -104,9 +104,7 @@ class ProxmoxManager:
             vlan_interfaces = [
                 iface for iface in interfaces if iface["iface"].endswith(f".{vlan}")
             ]
-            logging.debug(
-                "VLAN {} Network interfaces: {}".format(vlan, vlan_interfaces)
-            )
+            logging.debug("VLAN {} Network interfaces: {}".format(vlan, vlan_interfaces))
             return vlan_interfaces
 
     def add_net_vmbr(self, vmbr_name, comments="", apply=True):
@@ -181,9 +179,7 @@ class ProxmoxManager:
         )
         interfaces_list = self.get_network_interfaces(vlan=vlan_id)
         if len(interfaces_list) == 0:
-            logging.info(
-                f"Interface {interface_name}.{vlan_id} does not exist on {self.host}."
-            )
+            logging.info(f"Interface {interface_name}.{vlan_id} does not exist on {self.host}.")
 
             node = self.proxmox.nodes.get()[0]["node"]
             logging.debug(f"Creating interface {interface_name}.{vlan_id} on {node}")
@@ -193,15 +189,11 @@ class ProxmoxManager:
                 type="vlan",
             )
 
-            logging.info(
-                f"VLAN interface {interface_name}.{vlan_id} created on {self.host}."
-            )
+            logging.info(f"VLAN interface {interface_name}.{vlan_id} created on {self.host}.")
             if apply:
                 self.network_apply()
         else:
-            logging.info(
-                f"Interface {interface_name}.{vlan_id} already exists on {self.host}."
-            )
+            logging.info(f"Interface {interface_name}.{vlan_id} already exists on {self.host}.")
 
     def network_apply(self):
         """
@@ -319,24 +311,53 @@ class ProxmoxManager:
         )
         logging.info(f"Backup {backup_file} restored on {self.host}.")
 
-    def check_task_stopped(self, upid: str, timeout_sec=300):
+    def get_task_status(self, upid: str):
         """
-        Check if a Proxmox task (by UPID) has stopped.
+        Get the status of a Proxmox task (by UPID).
         upid: Task UPID, must start with "UPID:"
-        timeout_sec: Maximum wait time in seconds (default 300)
-        return: bool
+        return: tuple (status: str | None, exitstatus: str | None)
         """
         node = self.proxmox.nodes.get()[0]["node"]
         logging.debug(f"Checking status of task {upid} on node {node}.")
         if not isinstance(upid, str) or not upid.startswith("UPID:"):
+            logging.error(f"Invalid UPID format: {upid}")
+            raise ValueError(f"Invalid UPID format: {upid}")
+
+        try:
+            task_info = self.proxmox.nodes(node).tasks(upid).status.get()
+            status = task_info.get("status")
+            exitstatus = task_info.get("exitstatus")
+            return status, exitstatus
+        except Exception as e:
+            logging.error(f"Unable to query the status of task {upid}: {e}")
+            return None, None
+
+    def check_task_stopped(self, upid: str, timeout_sec=300):
+        """
+        Check if a Proxmox task (by UPID) has stopped successfully.
+        Blocks until the task is stopped or timeout is reached.
+        upid: Task UPID, must start with "UPID:"
+        timeout_sec: Maximum wait time in seconds (default 300)
+        return: bool (True if task stopped with exitstatus == "OK", False otherwise)
+        """
+        node = self.proxmox.nodes.get()[0]["node"]
+        logging.debug(f"Waiting for task {upid} to complete on node {node} (timeout: {timeout_sec}s).")
+        if not isinstance(upid, str) or not upid.startswith("UPID:"):
+            logging.error(f"Invalid UPID format: {upid}")
             raise ValueError(f"Invalid UPID format: {upid}")
 
         start = time.time()
         while time.time() - start < timeout_sec:
             try:
-                status = self.proxmox.nodes(node).tasks(upid).status.get().get("status")
-                if status == "stopped":
+                task_info = self.proxmox.nodes(node).tasks(upid).status.get()
+                status = task_info.get("status")
+                exitstatus = task_info.get("exitstatus")
+                if status == "stopped" and exitstatus == "OK":
                     return True
+                elif status == "stopped":
+                    error_msg = exitstatus or "Unknown error"
+                    logging.error(f"Task {upid} failed with exitstatus: {error_msg}")
+                    return False 
             except Exception as e:
                 logging.error(f"Unable to query the status of task {upid}: {e}")
                 return False
@@ -387,3 +408,15 @@ class ProxmoxManager:
         except Exception as e:
             logging.error(f"Unable to verify storage '{storage_name}' on node {node}: {e}")
             return False
+
+    def get_next_vmid(self):
+        """
+        Get the next available VMID in the Proxmox cluster.
+        return: int (next available VMID) or None if error
+        """
+        logging.debug("Requesting next available VMID from the Proxmox cluster.")
+        try:
+            return int(self.proxmox.cluster.nextid.get())
+        except Exception as e:
+            logging.error(f"Unable to retrieve next available VMID: {e}")
+            return None

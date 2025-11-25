@@ -14,6 +14,7 @@ class ProxmoxVM:
         net0_vm / net1_vm: network bridges (e.g. vmbr140)
         """
         self.vmid = int(vmid)
+        self.newid = int()
         self.name_vm = str()
         self.pool_vm = str()
         self.template_vm = int()
@@ -26,76 +27,76 @@ class ProxmoxVM:
         """
         Start a virtual machine.
         vmid: self.vmid
-        return: bool
+        return: tuple (success: bool, upid: str | None)
         """
         node = self.manager.proxmox.nodes.get()[0]["node"]
         logging.debug(f"Attempting to start VM {self.vmid} on node {node}.")
         try:
-            self.manager.proxmox.nodes(node).qemu(self.vmid).status.start.post()
-            return True
+            upid = self.manager.proxmox.nodes(node).qemu(self.vmid).status.start.post()
+            return True, upid
         except Exception as e:
             logging.error(f"Unable to start VM {self.vmid}: {e}")
-            return False
+            return False, None
 
     def shutdown(self):
         """
         Shutdown virtual machine (ACPI event).
         vmid: self.vmid
-        return: bool
+        return: tuple (success: bool, upid: str | None)
         """
         node = self.manager.proxmox.nodes.get()[0]["node"]
         logging.debug(f"Attempting to shutdown VM {self.vmid} on node {node}.")
         try:
-            self.manager.proxmox.nodes(node).qemu(self.vmid).status.shutdown.post()
-            return True
+            upid = self.manager.proxmox.nodes(node).qemu(self.vmid).status.shutdown.post()
+            return True, upid
         except Exception as e:
             logging.error(f"Unable to shutdown VM {self.vmid}: {e}")
-            return False
+            return False, None
 
     def stop(self):
         """
         Stop virtual machine (hard power-off).
         vmid: self.vmid
-        return: bool
+        return: tuple (success: bool, upid: str | None)
         """
         node = self.manager.proxmox.nodes.get()[0]["node"]
         logging.debug(f"Attempting to stop VM {self.vmid} on node {node}.")
         try:
-            self.manager.proxmox.nodes(node).qemu(self.vmid).status.stop.post()
-            return True
+            upid = self.manager.proxmox.nodes(node).qemu(self.vmid).status.stop.post()
+            return True, upid
         except Exception as e:
             logging.error(f"Unable to stop VM {self.vmid}: {e}")
-            return False
+            return False, None
 
     def reboot(self):
         """
         Reboot the VM (soft reboot via ACPI).
         vmid: self.vmid
-        return: bool
+        return: tuple (success: bool, upid: str | None)
         """
         node = self.manager.proxmox.nodes.get()[0]["node"]
         logging.debug(f"Attempting to reboot VM {self.vmid} on node {node}.")
         try:
-            self.manager.proxmox.nodes(node).qemu(self.vmid).status.reboot.post()
-            return True
+            upid = self.manager.proxmox.nodes(node).qemu(self.vmid).status.reboot.post()
+            return True, upid
         except Exception as e:
             logging.error(f"Unable to reboot VM {self.vmid}: {e}")
-            return False
+            return False, None
 
     def delete(self):
         """
         Destroy the VM and all used/owned volumes.
         vmid: self.vmid
-        return: bool
+        return: tuple (success: bool, upid: str | None)
         """
         node = self.manager.proxmox.nodes.get()[0]["node"]
         logging.debug(f"Attempting to delete VM {self.vmid} on node {node}.")
         try:
-            self.manager.proxmox.nodes(node).qemu(self.vmid).delete()
-            return True
+            upid = self.manager.proxmox.nodes(node).qemu(self.vmid).delete()
+            return True, upid
         except Exception as e:
             logging.error(f"Unable to delete VM {self.vmid}: {e}")
-            return False
+            return False, None
 
     def search_name(self, vm_name: str | None = None, template: bool = False):
         """
@@ -243,6 +244,35 @@ class ProxmoxVM:
         logging.warning(f"No management IPv4 found for VM {self.vmid}.")
         return ""
 
+    def get_network_interfaces(self):
+        """
+        Get the network interfaces defined in the VM configuration.
+        return: dict or None if the configuration cannot be retrieved
+        """
+        node = self.manager.proxmox.nodes.get()[0]["node"]
+        logging.debug(f"Retrieving network interfaces for VM {self.vmid} on node {node}.")
+        try:
+            config = self.manager.proxmox.nodes(node).qemu(self.vmid).config.get()
+        except Exception as e:
+            logging.error(f"Unable to retrieve VM {self.vmid} configuration: {e}")
+            return None
+
+        interfaces = {}
+        for config_key, config_value in config.items():
+            if config_key.startswith("net"):
+                iface_info = {"model": None, "mac": None, "bridge": None}
+                params = config_value.split(",")
+                for param in params:
+                    if "=" in param:
+                        param_name, param_value = param.split("=", 1)
+                        if param_name in ["virtio", "e1000"]:
+                            iface_info["model"] = param_name
+                            iface_info["mac"] = param_value
+                        elif param_name == "bridge":
+                            iface_info["bridge"] = param_value
+                interfaces[config_key] = iface_info
+        return interfaces
+
     def add_network_interface(self, model: str | None = None, bridge: str | None = None, firewall: bool | None = None):
         """
         Add a new network interface to the virtual machine.
@@ -334,3 +364,38 @@ class ProxmoxVM:
         except Exception as e:
             logging.error(f"Error while updating bridge for {net_name} on VM {self.vmid}: {e}")
             return False
+
+    def clone_vm(self):
+        """
+        Clone a template VM.
+        return: UPID of the clone task or None if an error occurred
+        """
+        node = self.manager.proxmox.nodes.get()[0]["node"]
+        logging.debug(f"Cloning template={self.template_vm} → newid={self.newid}, name={self.name_vm}, pool={self.pool_vm}, storage={self.storage_vm} on node {node}")
+
+        if not self.template_vm:
+            logging.error("Unable to clone VM: template_vm is missing.")
+            return None
+        if not self.newid:
+            logging.error("Unable to clone VM: newid is missing.")
+            return None
+        if not self.pool_vm:
+            logging.error("Unable to clone VM: pool_vm is missing.")
+            return None
+        if not self.storage_vm:
+            logging.error("Unable to clone VM: storage_vm is missing.")
+            return None
+        if not self.name_vm:
+            logging.error("Unable to clone VM: name_vm is missing.")
+            return None
+
+        try:
+            upid = self.manager.proxmox.nodes(node).qemu(self.template_vm).clone.post(newid=self.newid,full=1,target=node,pool=self.pool_vm,storage=self.storage_vm,name=self.name_vm)
+            if not upid:
+                logging.error("Unable to clone VM {self.template_vm}: No UPID received from Proxmox.")
+                return None
+            return upid
+
+        except Exception as e:
+            logging.error(f"Unable to clone VM {self.template_vm}: {e}")
+            return None

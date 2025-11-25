@@ -19,8 +19,7 @@ class ProxmoxCSV:
         logging.debug(f"Detecting delimiter for CSV file: {self.csv_path}")
         try:
             with open(self.csv_path, newline="", encoding="utf-8-sig") as f:
-                sample = f.read(64)
-                f.seek(0)
+                sample = f.read(512)
                 dialect = csv.Sniffer().sniff(sample, delimiters=";,")
                 logging.info(f"Detected delimiter '{dialect.delimiter}' for {self.csv_path}")
                 return dialect.delimiter
@@ -50,15 +49,15 @@ class ProxmoxCSV:
             logging.error(f"Failed to copy CSV {self.csv_path}: {e}")
             return None
 
-    def count_rows(self):
+    def count_rows(self, delimiter: str = ";"):
         """
         Count how many data rows the CSV contains (excluding header).
         return: int
         """
-        logging.debug(f"Counting rows in CSV file: {self.csv_path}")
+        logging.debug(f"Counting rows in CSV file: {self.csv_path} (delimiter='{delimiter}')")
         try:
             with open(self.csv_path, newline="", encoding="utf-8-sig") as f:
-                reader = csv.reader(f)
+                reader = csv.reader(f, delimiter=delimiter)
                 next(reader, None)
                 return sum(1 for _ in reader)
         except Exception as e:

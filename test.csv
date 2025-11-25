@@ -1,3 +1,3 @@
-student_name,student_firstname,student_login,target_host,vm_name,template_name,pool,storage,newid,net0,net1,ipv4,status
-durand,thomas,durandth,pm-serv22,vm-etudiant-A,TC-2020-Router,durandth,data,200,vmbrdurandth1,,,
-durand,thomas,durandth,pm-serv22,vm-etudiant-B,Alma10,durandth,data,201,,vmbrdurandth2,,
+﻿student_name,student_firstname,student_login,target_host,vm_name,template_name,pool,storage,newid,net0,net1,ipv4,status
+,,durandth,pm-serv22,durandth,TC-2020-Router,durandth,data,,,,,
+durand,thomas,,pm-serv22,durandt,TC-2020-Router,durandth,data,,,,,
