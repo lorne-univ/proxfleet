@@ -273,51 +273,65 @@ class ProxmoxVM:
                 interfaces[config_key] = iface_info
         return interfaces
 
-    def add_network_interface(self, model: str | None = None, bridge: str | None = None, firewall: bool | None = None):
+    def add_network_interface(self, net: str | None = None, model: str | None = None, bridge: str | None = None, firewall: bool | None = None):
         """
         Add a new network interface to the virtual machine.
+        If net is not specified, it will automatically use the next available netX number.
+        If net is specified, it will check if it already exists to avoid duplicates.
         If model, bridge, and firewall are not specified, the method will copy
         the configuration (model, bridge, firewall) from the last existing interface.
-        Should be called while the VM is powered off.
+        net: Optional. Interface name (e.g. 'net0', 'net1').
         model: Optional. Network card model (e.g. 'virtio', 'e1000').
         bridge: Optional. Bridge to attach (e.g. 'vmbr140').
         firewall: Optional. Enable firewall (True | False).
         return: bool
         """
         node = self.manager.proxmox.nodes.get()[0]["node"]
-        logging.debug(f"Attempting to add network interface (model={model}, bridge={bridge}, firewall={firewall}) for VM {self.vmid} on node {node}.")
-
+        logging.debug(f"Attempting to add network interface (net={net}, model={model}, bridge={bridge}, firewall={firewall}) for VM {self.vmid} on node {node}.")
         try:
             cfg = self.manager.proxmox.nodes(node).qemu(self.vmid).config.get()
-            next_index = 0
-            while f"net{next_index}" in cfg:
-                next_index += 1
-
-            if model is None and bridge is None and firewall is None:
-                last_index = next_index - 1
-                last_net = cfg.get(f"net{last_index}")
-                if not last_net:
-                    logging.error(f"No existing network interface found to copy for VM {self.vmid}.")
+            if net is not None:
+                if net in cfg:
+                    logging.error(f"Network interface {net} already exists on VM {self.vmid}.")
                     return False
-                parts = last_net.split(",")
-                model = "virtio"
-                bridge = None
-                firewall = None
+                target_net = net
+            else:
+                next_index = 0
+                while f"net{next_index}" in cfg:
+                    next_index += 1
+                target_net = f"net{next_index}"
 
-                for part in parts:
-                    if part.startswith("virtio=") or part.startswith("e1000="):
-                        model = part.split("=")[0]
-                    elif part.startswith("bridge="):
-                        bridge = part.split("=")[1]
-                    elif part.startswith("firewall="):
-                        firewall = part.split("=")[1] == "1"
+            existing_nets = [k for k in cfg.keys() if k.startswith("net")]
+            if existing_nets:
+                existing_nets.sort()
+                last_net = existing_nets[-1]
+                last_net_config = cfg.get(last_net)
+                if last_net_config:
+                    parts = last_net_config.split(",")
+                    last_model = "virtio"
+                    last_bridge = None
+                    last_firewall = None
+                    for part in parts:
+                        if part.startswith("virtio=") or part.startswith("e1000="):
+                            last_model = part.split("=")[0]
+                        elif part.startswith("bridge="):
+                            last_bridge = part.split("=")[1]
+                        elif part.startswith("firewall="):
+                            last_firewall = (part.split("=")[1] == "1")
+                    if model is None:
+                        model = last_model
+                    if bridge is None:
+                        bridge = last_bridge
+                    if firewall is None:
+                        firewall = last_firewall
 
             model = model or "virtio"
             bridge = bridge or "vmbr0"
             new_net = f"model={model},bridge={bridge}"
             if firewall:
                 new_net += ",firewall=1"
-            self.manager.proxmox.nodes(node).qemu(self.vmid).config.post(**{f"net{next_index}": new_net})
+            self.manager.proxmox.nodes(node).qemu(self.vmid).config.post(**{target_net: new_net})
+            logging.debug(f"Network interface {target_net} added successfully to VM {self.vmid}.")
             return True
 
         except Exception as e:
@@ -358,7 +372,7 @@ class ProxmoxVM:
 
             new_net_config = ",".join(updated_parts)
             self.manager.proxmox.nodes(node).qemu(self.vmid).config.post(**{net_name: new_net_config})
-            logging.info(f"Bridge for {net_name} successfully updated to '{new_bridge}' on VM {self.vmid}.")
+            logging.debug(f"Bridge for {net_name} successfully updated to '{new_bridge}' on VM {self.vmid}.")
             return True
 
         except Exception as e:

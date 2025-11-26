@@ -21,7 +21,7 @@ class ProxmoxCSV:
             with open(self.csv_path, newline="", encoding="utf-8-sig") as f:
                 sample = f.read(512)
                 dialect = csv.Sniffer().sniff(sample, delimiters=";,")
-                logging.info(f"Detected delimiter '{dialect.delimiter}' for {self.csv_path}")
+                logging.debug(f"Detected delimiter '{dialect.delimiter}' for {self.csv_path}")
                 return dialect.delimiter
         except Exception as e:
             logging.error(f"Unable to detect delimiter for {self.csv_path}: {e}. Defaulting to ';'")
@@ -89,7 +89,7 @@ class ProxmoxCSV:
             with open(self.csv_path, newline="", encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f, delimiter=delimiter)
                 rows = list(reader)
-                logging.info(f"Read {len(rows)} rows from {self.csv_path}")
+                logging.debug(f"Read {len(rows)} rows from {self.csv_path}")
                 return rows
         except Exception as e:
             logging.error(f"Failed to read CSV {self.csv_path}: {e}")
@@ -106,7 +106,7 @@ class ProxmoxCSV:
                 writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=delimiter)
                 writer.writeheader()
                 writer.writerows(rows)
-            logging.info(f"CSV successfully written: {self.csv_path}")
+            logging.debug(f"CSV successfully written: {self.csv_path}")
             return True
         except Exception as e:
             logging.error(f"Failed to write CSV {self.csv_path}: {e}")

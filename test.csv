@@ -1,3 +1,4 @@
 ﻿student_name,student_firstname,student_login,target_host,vm_name,template_name,pool,storage,newid,net0,net1,ipv4,status
-,,durandth,pm-serv22,durandth,TC-2020-Router,durandth,data,,,,,
-durand,thomas,,pm-serv22,durandt,TC-2020-Router,durandth,data,,,,,
+,,durandth,pm-serv22,vm-test1,Alma10,durandth,data,,,vmbr170,,
+durand,thomas,,pm-serv22,vm-test2,Alma10,durandth,data,,,vmbrdurandth2,,
+durand,thomas,durandth,pm-serv22,vm-test3,Windows11,durandth,data,,,vmbrdurandth2,,
