@@ -493,11 +493,16 @@ def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwo
             continue
 
         current_status = vm_helper.status()
-        logging.debug(f"[{i+1}/{len(rows)}] VM {vm_name} current status: {current_status}")
+        logging.debug(f"[{i+1}/{len(rows)}] VM {vm_name} actual status: {current_status}")
         if current_status == "running":
             logging.debug(f"[{i+1}/{len(rows)}] Skipping {vm_name} - already running")
             results_map[i] = True
             row["status"] = "running"
+            continue
+        elif current_status != "stopped":
+            logging.warning(f"[{i+1}/{len(rows)}] VM {vm_name} is in state '{current_status}' - cannot start")
+            results_map[i] = False
+            row["status"] = "error"
             continue
 
         logging.debug(f"[{i+1}/{len(rows)}] Starting VM {vm_name} (VMID: {newid})...")
@@ -633,11 +638,16 @@ def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwor
             continue
 
         current_status = vm_helper.status()
-        logging.debug(f"[{i+1}/{len(rows)}] VM {vm_name} current status: {current_status}")
+        logging.debug(f"[{i+1}/{len(rows)}] VM {vm_name} actual status: {current_status}")
         if current_status == "stopped":
             logging.debug(f"[{i+1}/{len(rows)}] Skipping {vm_name} - already stopped")
             results_map[i] = True
             row["status"] = "stopped"
+            continue
+        elif current_status != "running":
+            logging.warning(f"[{i+1}/{len(rows)}] VM {vm_name} is in state '{current_status}' - cannot stop")
+            results_map[i] = False
+            row["status"] = "error"
             continue
 
         logging.debug(f"[{i+1}/{len(rows)}] Stopping VM {vm_name} (VMID: {newid})...")
@@ -771,6 +781,14 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
             results_map[i] = True
             row["status"] = ""
             row["ipv4"] = ""
+            continue
+
+        current_status = vm_helper.status()
+        logging.debug(f"[{i+1}/{len(rows)}] VM {vm_name} actual status: {current_status}")
+        if current_status != "stopped":
+            logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} is '{current_status}' - must be stopped before deletion")
+            results_map[i] = False
+            row["status"] = "error"
             continue
 
         logging.debug(f"[{i+1}/{len(rows)}] Deleting VM {vm_name} (VMID: {newid})...")
@@ -1011,7 +1029,7 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
     logging.debug("[STEP 3/4] Preparing Proxmox connections.")
     connections = {"user": proxmox_user, "password": proxmox_password}
     results_map = {}
-    unique_hosts = set(row["target_host"] for row in rows if row.get("newid") and row.get("status") == "running")
+    unique_hosts = set(row["target_host"] for row in rows if row.get("newid"))
 
     for target_host in unique_hosts:
         server_entry = next((s for s in servers if s["host"] == target_host), None)
@@ -1037,12 +1055,6 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
     logging.debug("[STEP 4/4] Retrieving management IPs sequentially.")
     for i, row in enumerate(rows):
         newid_str = row.get("newid", "").strip()
-        status = row.get("status", "").strip()
-
-        if status != "running":
-            logging.debug(f"[{i+1}/{len(rows)}] Skipping row {i+1} - VM not running (status: {status})")
-            results_map[i] = {"success": True, "skipped": True}
-            continue
 
         if not newid_str:
             logging.debug(f"[{i+1}/{len(rows)}] Skipping row {i+1} - no newid")
@@ -1069,6 +1081,14 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")
             results_map[i] = {"success": False, "skipped": False}
+            continue
+
+        current_status = vm_helper.status()
+        logging.debug(f"[{i+1}/{len(rows)}] VM {vm_name} actual status: {current_status}")
+        if current_status != "running":
+            logging.debug(f"[{i+1}/{len(rows)}] Skipping {vm_name} - not running (status: {current_status})")
+            results_map[i] = {"success": True, "skipped": True}
+            rows[i]["ipv4"] = ""
             continue
 
         agent_status = vm_helper.status_agent()
