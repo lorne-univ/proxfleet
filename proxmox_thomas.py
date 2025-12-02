@@ -1,24 +1,11 @@
 import asyncio
 import logging
-import os
 import time
 import yaml
-from dotenv import load_dotenv
 from proxmox_manager import ProxmoxManager
 from proxmox_vm import ProxmoxVM
 from proxmox_csv import ProxmoxCSV
 
-
-# Load environment variables from the .env file
-load_dotenv()
-
-# Configuration file paths
-CONFIG_YAML = "config.yaml"
-INPUT_CSV = "lorne.csv"
-
-# Retrieve information from the .env file
-proxmox_user = os.getenv('PROXMOX_USER')
-proxmox_password = os.getenv('PROXMOX_PASSWORD')
 
 def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
     """
