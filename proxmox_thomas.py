@@ -14,7 +14,7 @@ load_dotenv()
 
 # Configuration file paths
 CONFIG_YAML = "config.yaml"
-INPUT_CSV = "test.csv"
+INPUT_CSV = "lorne.csv"
 
 # Retrieve information from the .env file
 proxmox_user = os.getenv('PROXMOX_USER')
@@ -775,12 +775,18 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
         
         proxmox_host = connections[target_host]["proxmox_host"]
         vm_helper = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, newid)
-        exists, _ = vm_helper.search_vmid(newid)
+        exists, actual_vm_name = vm_helper.search_vmid(newid)
         if not exists:
-            logging.warning(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host} - marking as success")
+            logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host} - marking as success")
             results_map[i] = True
             row["status"] = ""
             row["ipv4"] = ""
+            continue
+
+        if actual_vm_name != vm_name:
+            logging.error(f"[{i+1}/{len(rows)}] VMID {newid} exists but name mismatch! Expected: '{vm_name}', Found: '{actual_vm_name}'")
+            results_map[i] = False
+            row["status"] = "error"
             continue
 
         current_status = vm_helper.status()
@@ -803,7 +809,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
         manager = connections[target_host]["manager"]
         task_success = manager.check_task_stopped(upid, timeout_sec=120)
         if task_success:
-            logging.info(f"[{i+1}/{len(rows)}] VM {vm_name} deleted successfully")
+            logging.debug(f"[{i+1}/{len(rows)}] VM {vm_name} deleted successfully")
             results_map[i] = True
             row["status"] = ""
             row["ipv4"] = ""
@@ -1170,43 +1176,3 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
     logging.debug(f"Failed (agent timeout or no IP): {failed}")
     logging.debug("=" * 70)
     return [results_map.get(i, {"success": True, "skipped": True}).get("success") for i in range(len(rows))]
-
-
-# Méthodes à la suite mais on peut les lancer aussi séparemment via un autre programme.
-# Tcheck du CSV, clonage des différentes VMs, configuration des bridges réseaux,
-# lancement des VMs et enfin récupération des adresses IP de management.
-# Le fichier csv étant mis à jour au fur et a mesure.
-
-# 1. Vérifier la validité du CSV
-print("=" * 70)
-print("STEP 1/5: Validating CSV file")
-valid, errors = check_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
-if not valid:
-    logging.error("CSV validation failed.")
-    logging.error(f"Errors found: {errors}")
-    exit(1)
-print("CSV validation successful.")
-
-# 2. Cloner les VMs
-print("=" * 70)
-print("STEP 2/5: Cloning VMs from templates")
-clone_results = clone_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
-print(f"Cloning completed: {clone_results}.")
-
-# 3. Configurer les bridges réseau
-print("=" * 70)
-print("STEP 3/5: Configuring network bridges")
-bridge_results = networkbridge_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
-print(f"Network bridges configured: {bridge_results}.")
-
-# 4. Démarrer les VMs
-print("=" * 70)
-print("STEP 4/5: Starting VMs")
-start_results = start_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
-print(f"VMs started: {start_results}.")
-
-# 5. Récupérer les IPs de management
-print("=" * 70)
-print("STEP 5/5: Retrieving management IP addresses")
-ip_results = managementip_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
-print(f"Management IPs retrieved: {ip_results}.")

@@ -19,7 +19,7 @@ class ProxmoxCSV:
         logging.debug(f"Detecting delimiter for CSV file: {self.csv_path}")
         try:
             with open(self.csv_path, newline="", encoding="utf-8-sig") as f:
-                sample = f.read(512)
+                sample = f.read(2048)
                 dialect = csv.Sniffer().sniff(sample, delimiters=";,")
                 logging.debug(f"Detected delimiter '{dialect.delimiter}' for {self.csv_path}")
                 return dialect.delimiter
