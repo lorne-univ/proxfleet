@@ -451,7 +451,7 @@ def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwo
         newid_str = row.get("newid", "").strip()
         if not newid_str:
             logging.debug(f"[{i+1}/{len(rows)}] Skipping row {i+1} - no newid")
-            results_map[i] = True
+            results_map[i] = False
             continue
 
         try:
@@ -596,7 +596,7 @@ def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwor
         newid_str = row.get("newid", "").strip()
         if not newid_str:
             logging.debug(f"[{i+1}/{len(rows)}] Skipping row {i+1} - no newid")
-            results_map[i] = True
+            results_map[i] = False
             continue
 
         try:
@@ -741,7 +741,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
         newid_str = row.get("newid", "").strip()
         if not newid_str:
             logging.debug(f"[{i+1}/{len(rows)}] Skipping row {i+1} - no newid")
-            results_map[i] = True
+            results_map[i] = False
             continue
         
         try:
@@ -765,7 +765,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
         exists, actual_vm_name = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host} - marking as success")
-            results_map[i] = True
+            results_map[i] = False
             row["status"] = ""
             row["ipv4"] = ""
             continue
@@ -892,7 +892,7 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
         newid_str = row.get("newid", "").strip()
         if not newid_str:
             logging.debug(f"[{i+1}/{len(rows)}] Skipping row {i+1} - no newid")
-            results_map[i] = True
+            results_map[i] = False
             continue
 
         try:
@@ -908,7 +908,7 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
         net1 = row.get("net1", "").strip()
         if not net0 and not net1:
             logging.debug(f"[{i+1}/{len(rows)}] Skipping {vm_name} - no network bridges defined")
-            results_map[i] = True
+            results_map[i] = False
             continue
 
         target_host = row["target_host"]
@@ -968,9 +968,9 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
         
         results_map[i] = row_success
         if row_success:
-            logging.debug(f"[{i+1}/{len(rows)}] ✓ Network bridges updated successfully for VM {vm_name}")
+            logging.debug(f"[{i+1}/{len(rows)}] Network bridges updated successfully for VM {vm_name}")
         else:
-            logging.error(f"[{i+1}/{len(rows)}] ✗ Failed to update network bridges for VM {vm_name}")
+            logging.error(f"[{i+1}/{len(rows)}] Failed to update network bridges for VM {vm_name}")
 
     # 5. Summary
     logging.debug("Network Bridge Update Operations Completed")
@@ -1029,8 +1029,8 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
         if not server_entry:
             logging.error(f"Server '{target_host}' not found in config.")
             for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid") and row.get("status") == "running":
-                    results_map[i] = {"success": False, "skipped": False}
+                if row["target_host"] == target_host and row.get("newid"):
+                    results_map[i] = False
             continue
 
         proxmox_host = server_entry["usmb-tri"]
@@ -1041,8 +1041,8 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
         except Exception as e:
             logging.error(f"Failed to connect to {target_host}: {e}")
             for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid") and row.get("status") == "running":
-                    results_map[i] = {"success": False, "skipped": False}
+                if row["target_host"] == target_host and row.get("newid"):
+                    results_map[i] = False
 
     # 4. Process VMs sequentially
     logging.debug("[STEP 4/4] Retrieving management IPs sequentially.")
@@ -1050,22 +1050,25 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
         newid_str = row.get("newid", "").strip()
 
         if not newid_str:
-            logging.debug(f"[{i+1}/{len(rows)}] Skipping row {i+1} - no newid")
-            results_map[i] = {"success": True, "skipped": True}
+            logging.error(f"[{i+1}/{len(rows)}] No newid - cannot retrieve IP")
+            results_map[i] = False
+            rows[i]["ipv4"] = ""
             continue
 
         try:
             newid = int(newid_str)
         except ValueError:
             logging.error(f"[{i+1}/{len(rows)}] Invalid newid '{newid_str}'")
-            results_map[i] = {"success": False, "skipped": False}
+            results_map[i] = False
+            rows[i]["ipv4"] = ""
             continue
 
         target_host = row["target_host"]
         vm_name = row.get("vm_name", f"VM-{newid}")
         if target_host not in connections:
             logging.error(f"[{i+1}/{len(rows)}] No connection for host '{target_host}'")
-            results_map[i] = {"success": False, "skipped": False}
+            results_map[i] = False
+            rows[i]["ipv4"] = ""
             continue
 
         proxmox_host = connections[target_host]["proxmox_host"]
@@ -1073,21 +1076,22 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
         exists, _ = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")
-            results_map[i] = {"success": False, "skipped": False}
+            results_map[i] = False
+            rows[i]["ipv4"] = ""
             continue
 
         current_status = vm_helper.status()
         logging.debug(f"[{i+1}/{len(rows)}] VM {vm_name} actual status: {current_status}")
         if current_status != "running":
-            logging.debug(f"[{i+1}/{len(rows)}] Skipping {vm_name} - not running (status: {current_status})")
-            results_map[i] = {"success": True, "skipped": True}
+            logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} is not running (status: {current_status}) - cannot retrieve IP")
+            results_map[i] = False
             rows[i]["ipv4"] = ""
             continue
 
         agent_status = vm_helper.status_agent()
         if agent_status != True:
-            logging.warning(f"[{i+1}/{len(rows)}] QEMU agent not enabled for VM {vm_name} - skipping IP retrieval")
-            results_map[i] = {"success": True, "skipped": True}
+            logging.error(f"[{i+1}/{len(rows)}] QEMU agent not enabled for VM {vm_name} - cannot retrieve IP")
+            results_map[i] = False
             rows[i]["ipv4"] = ""
             continue
 
@@ -1101,8 +1105,8 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
         while True:
             elapsed = time.time() - start_time
             if elapsed > timeout:
-                logging.warning(f"[{i+1}/{len(rows)}] [{target_host}] Timeout for {vm_name} after {timeout}s (tried {ping_attempts} pings)")
-                results_map[i] = {"success": False, "skipped": False}
+                logging.error(f"[{i+1}/{len(rows)}] [{target_host}] Timeout for {vm_name} after {timeout}s (tried {ping_attempts} pings)")
+                results_map[i] = False
                 rows[i]["ipv4"] = ""
                 break
 
@@ -1123,7 +1127,7 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
             while ip_attempts < max_ip_attempts:
                 elapsed = time.time() - start_time
                 if elapsed > timeout:
-                    logging.warning(f"[{i+1}/{len(rows)}] [{target_host}] Global timeout reached while retrieving IP for {vm_name}")
+                    logging.error(f"[{i+1}/{len(rows)}] [{target_host}] Global timeout reached while retrieving IP for {vm_name}")
                     break
                 
                 ip_attempts += 1
@@ -1137,11 +1141,11 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
             
             if management_ip:
                 rows[i]["ipv4"] = management_ip
-                results_map[i] = {"success": True, "skipped": False}
+                results_map[i] = True
             else:
-                logging.warning(f"[{i+1}/{len(rows)}] [{target_host}] No management IP found for {vm_name} after {ip_attempts} attempts")
+                logging.error(f"[{i+1}/{len(rows)}] [{target_host}] No management IP found for {vm_name} after {ip_attempts} attempts")
                 rows[i]["ipv4"] = ""
-                results_map[i] = {"success": False, "skipped": False}
+                results_map[i] = False
 
     # 5. Save CSV
     header = csv_handler.read_header(delimiter)
@@ -1154,12 +1158,10 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
     # 6. Summary
     logging.debug("Management IP Retrieval Operations Completed")
     total = len(rows)
-    retrieved = sum(1 for i, r in results_map.items() if isinstance(r, dict) and r.get("success") and not r.get("skipped"))
-    skipped = sum(1 for i, r in results_map.items() if isinstance(r, dict) and r.get("skipped"))
-    failed = sum(1 for i, r in results_map.items() if isinstance(r, dict) and not r.get("success") and not r.get("skipped"))
+    retrieved = sum(1 for r in results_map.values() if r)
+    failed = len(rows) - retrieved
     logging.debug(f"Total VMs in CSV: {total}")
     logging.debug(f"Successfully retrieved IPs: {retrieved}")
-    logging.debug(f"Skipped (not running, no agent, or no newid): {skipped}")
-    logging.debug(f"Failed (agent timeout or no IP): {failed}")
+    logging.debug(f"Failed: {failed}")
     logging.debug("=" * 70)
-    return [results_map.get(i, {"success": True, "skipped": True}).get("success") for i in range(len(rows))]
+    return [results_map.get(i, False) for i in range(len(rows))]
