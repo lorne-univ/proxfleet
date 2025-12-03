@@ -11,9 +11,7 @@ class ProxmoxManager:
         host: proxmox server hostname or IP
         """
         self.host = host
-        self.proxmox = ProxmoxAPI(
-            host, user=proxmox_admin, password=proxmox_admin_password, verify_ssl=True
-        )
+        self.proxmox = ProxmoxAPI(host, user=proxmox_admin, password=proxmox_admin_password, verify_ssl=True)
 
     def list_vms(self):
         """
@@ -403,5 +401,22 @@ class ProxmoxManager:
         return: bool
         """
         node = self.proxmox.nodes.get()[0]["node"]
-        self.proxmox.nodes(node).qemu(vmid).delete()
+        logging.debug(f"Checking if storage '{storage_name}' exists on node {node}.")
+        try:
+            storages = self.proxmox.nodes(node).storage.get()
+            return any(storage.get("storage") == storage_name for storage in storages)
+        except Exception as e:
+            logging.error(f"Unable to verify storage '{storage_name}' on node {node}: {e}")
+            return False
 
+    def get_next_vmid(self):
+        """
+        Get the next available VMID in the Proxmox cluster.
+        return: int (next available VMID) or None if error
+        """
+        logging.debug("Requesting next available VMID from the Proxmox cluster.")
+        try:
+            return int(self.proxmox.cluster.nextid.get())
+        except Exception as e:
+            logging.error(f"Unable to retrieve next available VMID: {e}")
+            return None
