@@ -66,16 +66,15 @@ def test_full_deployment():
     rows = csv_handler.read_csv(delimiter)
 
     print(f"{'VMID':<5} {'IPv4 Address':<20} {'Status':<15}")
-    print("-"*40)
+    print("-"*35)
     for row in rows:
         newid = row.get('newid', 'N/A')
         ipv4 = row.get('ipv4', 'N/A')
         status = row.get('status', 'N/A')
         print(f"{newid:<5} {ipv4:<20} {status:<15}")
-    print("\n")
 
     # 7. Stop VMs
-    print("STEP 7/8: Stopping VMs")
+    print("\nSTEP 7/8: Stopping VMs")
     stop_results = stop_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(stop_results):
         logging.warning("Some VMs failed to stop")
