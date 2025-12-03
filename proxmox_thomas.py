@@ -192,7 +192,8 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
             logging.error(f"Server '{target_host}' not found in config.")
             for i, row in enumerate(rows):
                 if row["target_host"] == target_host and not row.get("status"):
-                    results_map[i] = {"success": False, "error": "Server not found in config", "row_index": i}
+                    results_map[i] = False
+                    rows[i]["status"] = "error"
             continue
         proxmox_host = server_entry["usmb-tri"]
 
@@ -204,21 +205,22 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
             logging.error(f"Failed to connect to {target_host}: {e}")
             for i, row in enumerate(rows):
                 if row["target_host"] == target_host and not row.get("status"):
-                    results_map[i] = {"success": False, "error": f"Connection failed: {e}", "row_index": i}
+                    results_map[i] = False
+                    rows[i]["status"] = "error"
 
     # 4. Launch all clones
     logging.debug("[STEP 4/5] Launching clone operations.")
     clone_tasks = []
-    results_map = {}
     for i, row in enumerate(rows):
         if row.get("status"):
             logging.debug(f"[{i+1}/{len(rows)}] Skipping '{row.get('vm_name', 'unknown')}' - already processed (status: {row['status']})")
-            results_map[i] = {"success": True, "skipped": True, "row_index": i}
+            results_map[i] = False
             continue
         target_host = row["target_host"]
         if target_host not in connections:
             logging.error(f"[{i+1}/{len(rows)}] No connection for host '{target_host}'")
-            results_map[i] = {"success": False, "error": "No connection", "row_index": i}
+            results_map[i] = False
+            rows[i]["status"] = "error"
             continue
 
         manager = connections[target_host]["manager"]
@@ -236,17 +238,19 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
                     vm_name = f"{student_name}{student_firstname[0]}"
                 else:
                     logging.error(f"[{i+1}/{len(rows)}] Unable to determine VM name for row {i+1}")
-                    results_map[i] = {"success": False, "error": "No VM name", "row_index": i}
+                    results_map[i] = False
+                    rows[i]["status"] = "error"
                     continue
         logging.debug(f"[{i+1}/{len(rows)}] VM name determined: {vm_name}")
 
         vm_temp = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, 0)
-
         template_name = row["template_name"]
         template_found, template_vmid = vm_temp.search_name(template_name, template=True)
+
         if not template_found:
             logging.error(f"[{i+1}/{len(rows)}] Template '{template_name}' not found on {target_host}")
-            results_map[i] = {"success": False, "error": f"Template '{template_name}' not found", "row_index": i}
+            results_map[i] = False
+            rows[i]["status"] = "error"
             continue
         logging.debug(f"[{i+1}/{len(rows)}] Template '{template_name}' found with VMID {template_vmid}")
 
@@ -263,7 +267,8 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
             logging.debug(f"[{i+1}/{len(rows)}] Using next available VMID: {newid}")
         if newid is None:
             logging.error(f"[{i+1}/{len(rows)}] Unable to get next VMID")
-            results_map[i] = {"success": False, "error": "Unable to get VMID", "row_index": i}
+            results_map[i] = False
+            rows[i]["status"] = "error"
             continue
 
         vm_helper = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, template_vmid)
@@ -280,7 +285,8 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
             logging.debug(f"[{i+1}/{len(rows)}] Clone launched successfully → UPID: {upid}")
         else:
             logging.error(f"[{i+1}/{len(rows)}] Failed to launch clone for {vm_name}")
-            results_map[i] = {"success": False, "error": "Clone launch failed", "row_index": i}
+            results_map[i] = False
+            rows[i]["status"] = "error"
     logging.debug(f"Launch phase completed: {len(clone_tasks)} clones started")
 
     # 5. Monitor all clones in parallel
@@ -289,27 +295,24 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
         monitor_results = asyncio.run(_monitor_all_clones(clone_tasks))
         for result in monitor_results:
             row_index = result["row_index"]
-            results_map[row_index] = result
+            success = result["success"]
+            results_map[row_index] = success
+
+            if success:
+                rows[row_index]["status"] = "cloned"
+                if result.get("vm_name_generated") and not rows[row_index].get("vm_name"):
+                    rows[row_index]["vm_name"] = result["vm_name_generated"]
+                    logging.debug(f"Row {row_index+1}: Updated vm_name to '{result['vm_name_generated']}'")
+                if result.get("newid_generated") and not rows[row_index].get("newid"):
+                    rows[row_index]["newid"] = str(result["newid_generated"])
+                    logging.debug(f"Row {row_index+1}: Updated newid to '{result['newid_generated']}'")
+            else:
+                rows[row_index]["status"] = "error"
+
     else:
         logging.debug("[STEP 5/5] No clones to monitor (all skipped or failed to launch)")
 
     # 6. Update CSV with results
-    logging.debug("Updating CSV with clone results.")
-    for i, row in enumerate(rows):
-        result = results_map.get(i, {"success": False})
-        if result.get("skipped"):
-            continue
-        elif result["success"]:
-            row["status"] = "cloned"
-            if result.get("vm_name_generated") and not row.get("vm_name"):
-                row["vm_name"] = result["vm_name_generated"]
-                logging.debug(f"Row {i+1}: Updated vm_name to '{result['vm_name_generated']}'")
-            if result.get("newid_generated") and not row.get("newid"):
-                row["newid"] = str(result["newid_generated"])
-                logging.debug(f"Row {i+1}: Updated newid to '{result['newid_generated']}'")
-        else:
-            row["status"] = "error"
-
     header = csv_handler.read_header(delimiter)
     success = csv_handler.write_csv(rows, header, delimiter)
     if success:
@@ -319,21 +322,14 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
 
     # 7. Summary
     logging.debug("Clone Operations Completed")
-    skipped = sum(1 for r in results_map.values() if r.get("skipped"))
-    successes = sum(1 for r in results_map.values() if r["success"] and not r.get("skipped"))
-    failures = len(rows) - skipped - successes 
+    skipped = sum(1 for i, success in results_map.items() if success and rows[i].get("status") != "cloned")
+    successes = sum(1 for i, success in results_map.items() if success and rows[i].get("status") == "cloned")
+    failures = sum(1 for success in results_map.values() if not success)
     logging.debug(f"Total VMs in CSV: {len(rows)}")
     logging.debug(f"Skipped (already processed): {skipped}")
     logging.debug(f"Successfully cloned: {successes}")
     logging.debug(f"Failed: {failures}")
-    if failures > 0:
-        logging.debug("\nFailed VMs:")
-        for i, result in results_map.items():
-            if not result["success"] and not result.get("skipped"):
-                vm_name = rows[i].get("vm_name", f"Row {i+1}")
-                error = result.get("error", "Unknown error")
-                logging.error(f"  - {vm_name}: {error}")
-    return [results_map.get(i, {"success": False})["success"] for i in range(len(rows))]
+    return [results_map.get(i, False) for i in range(len(rows))]
 
 async def _monitor_all_clones(clone_tasks):
     """
@@ -530,7 +526,7 @@ def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwo
     logging.debug(f"Successfully started: {started}")
     logging.debug(f"Skipped (no newid): {skipped}")
     logging.debug(f"Failed: {failed}")
-    return [results_map.get(i, True) for i in range(len(rows))]
+    return [results_map.get(i, False) for i in range(len(rows))]
 
 def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
     """
@@ -675,7 +671,7 @@ def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwor
     logging.debug(f"Successfully stopped: {stopped}")
     logging.debug(f"Skipped (no newid): {skipped}")
     logging.debug(f"Failed: {failed}")
-    return [results_map.get(i, True) for i in range(len(rows))]
+    return [results_map.get(i, False) for i in range(len(rows))]
 
 def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
     """
@@ -736,7 +732,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
                     results_map[i] = False
 
     # 4. Delete VMs
-    logging.info("[STEP 4/4] Deleting VMs.")
+    logging.debug("[STEP 4/4] Deleting VMs.")
     for i, row in enumerate(rows):
         newid_str = row.get("newid", "").strip()
         if not newid_str:
@@ -824,7 +820,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
     logging.debug(f"Successfully deleted: {deleted}")
     logging.debug(f"Skipped (no newid): {skipped}")
     logging.debug(f"Failed: {failed}")
-    return [results_map.get(i, True) for i in range(len(rows))]
+    return [results_map.get(i, False) for i in range(len(rows))]
 
 def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
     """
@@ -983,7 +979,7 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
     logging.debug(f"Skipped (no newid or no bridges defined): {skipped}")
     logging.debug(f"Failed: {failed}")
     logging.debug("=" * 70)
-    return [results_map.get(i, True) for i in range(len(rows))]
+    return [results_map.get(i, False) for i in range(len(rows))]
 
 def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
     """
@@ -1113,9 +1109,9 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
             ping_attempts += 1
             agent_ready = vm_helper.ping_agent()
             if ping_attempts % 10 == 0:
-                logging.info(f"[{i+1}/{len(rows)}] [{target_host}] Waiting for {vm_name}... ({int(elapsed)}s/{timeout}s, {ping_attempts} pings)")
+                logging.debug(f"[{i+1}/{len(rows)}] [{target_host}] Waiting for {vm_name}... ({int(elapsed)}s/{timeout}s, {ping_attempts} pings)")
             if agent_ready:
-                logging.info(f"[{i+1}/{len(rows)}] [{target_host}] Agent responded for {vm_name} (after {ping_attempts} pings, {int(elapsed)}s)")
+                logging.debug(f"[{i+1}/{len(rows)}] [{target_host}] Agent responded for {vm_name} (after {ping_attempts} pings, {int(elapsed)}s)")
                 break
             time.sleep(ping_interval)
 
@@ -1133,10 +1129,10 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
                 ip_attempts += 1
                 management_ip = vm_helper.management_ip()
                 if management_ip:
-                    logging.info(f"[{i+1}/{len(rows)}] [{target_host}] IP retrieved for {vm_name}: {management_ip} (after {ip_attempts} attempts)")
+                    logging.debug(f"[{i+1}/{len(rows)}] [{target_host}] IP retrieved for {vm_name}: {management_ip} (after {ip_attempts} attempts)")
                     break
                 if ip_attempts % 5 == 0:
-                    logging.info(f"[{i+1}/{len(rows)}] [{target_host}] Waiting for IP from {vm_name}... (attempt {ip_attempts}/{max_ip_attempts})")
+                    logging.debug(f"[{i+1}/{len(rows)}] [{target_host}] Waiting for IP from {vm_name}... (attempt {ip_attempts}/{max_ip_attempts})")
                 time.sleep(2)
             
             if management_ip:

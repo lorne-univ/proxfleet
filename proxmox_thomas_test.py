@@ -27,6 +27,7 @@ def test_full_deployment():
     valid, errors = check_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not valid:
         logging.error(f"Validation failed: {errors}")
+        print("Validation NOK\n")
         return False
     print("Validation OK\n")
 
@@ -35,28 +36,36 @@ def test_full_deployment():
     clone_results = clone_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(clone_results):
         logging.warning("Some clones failed")
-    print("Cloning OK\n")
+        print("Cloning NOK\n")
+    else:
+        print("Cloning OK\n")
 
     # 3. Network
     print("STEP 3/8: Configuring network bridges")
     network_results = networkbridge_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(network_results):
         logging.warning("Some network configs failed")
-    print("Configuring OK\n")
+        print("Configuring NOK\n")
+    else:
+        print("Configuring OK\n")
 
     # 4. Start
     print("STEP 4/8: Starting VMs")
     start_results = start_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(start_results):
         logging.warning("Some VMs failed to start")
-    print("Starting OK\n")
+        print("Starting NOK\n")
+    else:
+        print("Starting OK\n")
 
     # 5. Get IPs
     print("STEP 5/8: Getting management IPs")
     ip_results = managementip_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(ip_results):
         logging.warning("Some IPs not retrieved")
-    print("IPs OK\n")
+        print("IPs NOK\n")
+    else:
+        print("IPs OK\n")
 
     # 6. Display IPs and wait for user validation
     print("STEP 6/8: Verification of IPs")
@@ -78,14 +87,18 @@ def test_full_deployment():
     stop_results = stop_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(stop_results):
         logging.warning("Some VMs failed to stop")
-    print("Stopping OK\n")
+        print("Stopping NOK\n")
+    else:
+        print("Stopping OK\n")
 
     # 8. Delete VMs
     print("STEP 8/8: Deleting VMs")
     delete_results = delete_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(delete_results):
         logging.warning("Some VMs failed to delete")
-    print("Deleting OK\n")
+        print("Deleting NOK\n")
+    else:
+        print("Deleting OK\n")
 
     print("="*70)
     print("FULL DEPLOYMENT TEST COMPLETED")
@@ -97,7 +110,7 @@ def test_validation_only():
     print("\n" + "="*70)
     print("TEST VALIDATION ONLY")
     print("="*70 + "\n")
-    
+
     valid, errors = check_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if valid:
         print("CSV is valid!")
@@ -105,7 +118,7 @@ def test_validation_only():
     else:
         print(f"CSV validation failed:")
         for error in errors:
-            print(f"  Line {error['line']}: {error['errors']}")
+            print(f" Line {error['line']}: {error['errors']}")
         return False
 
 def test_clone_only():
@@ -113,10 +126,10 @@ def test_clone_only():
     print("\n" + "="*70)
     print("TEST CLONE ONLY")
     print("="*70 + "\n")
-    
+
     results = clone_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     success_count = sum(1 for r in results if r)
-    print(f"\nClone completed: {success_count}/{len(results)} VMs cloned successfully")
+    print(f"\n{success_count}/{len(results)} VMs cloned")
     return all(results)
 
 def test_start_only():
@@ -127,7 +140,7 @@ def test_start_only():
     
     results = start_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     success_count = sum(1 for r in results if r)
-    print(f"\nStart completed: {success_count}/{len(results)} VMs started")
+    print(f"\n{success_count}/{len(results)} VMs started")
     return all(results)
 
 def test_stop_only():
@@ -138,7 +151,7 @@ def test_stop_only():
     
     results = stop_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     success_count = sum(1 for r in results if r)
-    print(f"\nStop completed: {success_count}/{len(results)} VMs stopped")
+    print(f"\n{success_count}/{len(results)} VMs stopped")
     return all(results)
 
 def test_delete_only():
@@ -147,15 +160,9 @@ def test_delete_only():
     print("TEST DELETE ONLY")
     print("="*70 + "\n")
     
-    print("WARNING: This will DELETE all VMs in the CSV!")
-    confirm = input("Type 'DELETE' to confirm: ")
-    if confirm != "DELETE":
-        print("Deletion cancelled")
-        return False
-    
     results = delete_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     success_count = sum(1 for r in results if r)
-    print(f"\nDelete completed: {success_count}/{len(results)} VMs deleted")
+    print(f"\n{success_count}/{len(results)} VMs deleted")
     return all(results)
 
 def test_network_only():
@@ -166,7 +173,7 @@ def test_network_only():
     
     results = networkbridge_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     success_count = sum(1 for r in results if r)
-    print(f"\nNetwork config completed: {success_count}/{len(results)} VMs configured")
+    print(f"\n{success_count}/{len(results)} VMs configured")
     return all(results)
 
 def test_ip_only():
@@ -177,17 +184,12 @@ def test_ip_only():
     
     results = managementip_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     success_count = sum(1 for r in results if r)
-    print(f"\nIP retrieval completed: {success_count}/{len(results)} IPs retrieved")
+    print(f"\n{success_count}/{len(results)} IPs retrieved")
     return all(results)
 
 def show_menu():
     """Menu interactif pour choisir quel test lancer"""
-    print("\n" + "="*70)
-    print("PROXMOX THOMAS - MENU DE TEST")
     print("="*70)
-    print(f"CSV File: {INPUT_CSV}")
-    print("="*70)
-    print("\nTests disponibles:")
     print("  1. Full deployment (validate → clone → network → start → IPs)")
     print("  2. Validation only")
     print("  3. Clone only")
@@ -199,7 +201,7 @@ def show_menu():
     print("  0. Quit")
     print("="*70)
     
-    choice = input("\nChoix [0-8]: ").strip()
+    choice = input("\nChoice [0-8]: ").strip()
     
     tests = {
         '1': test_full_deployment,
