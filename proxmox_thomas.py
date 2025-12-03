@@ -265,8 +265,16 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
         else:
             newid = manager.get_next_vmid()
             logging.debug(f"[{i+1}/{len(rows)}] Using next available VMID: {newid}")
+
         if newid is None:
             logging.error(f"[{i+1}/{len(rows)}] Unable to get next VMID")
+            results_map[i] = False
+            rows[i]["status"] = "error"
+            continue
+
+        test_newid, existing_vm_name = vm_temp.search_vmid(newid, template=False)
+        if test_newid:
+            logging.error(f"[{i+1}/{len(rows)}] VMID {newid} is already used by VM '{existing_vm_name}'")
             results_map[i] = False
             rows[i]["status"] = "error"
             continue
