@@ -35,11 +35,11 @@ class ProxmoxCSV:
         return: bool
         """
         logging.debug(f"Attempting to create CSV file: {self.csv_path}")
-        
+
         if os.path.exists(self.csv_path):
             logging.error(f"Cannot create CSV {self.csv_path}: file already exists")
             return False
-        
+
         try:
             with open(self.csv_path, "w", newline="", encoding="utf-8-sig") as f:
                 pass  # Create empty file
@@ -48,18 +48,18 @@ class ProxmoxCSV:
         except Exception as e:
             logging.error(f"Failed to create CSV {self.csv_path}: {e}")
             return False
-    
+
     def delete_csv(self) -> bool:
         """
         Delete the CSV file at the specified path.
         return: bool
         """
         logging.debug(f"Attempting to delete CSV file: {self.csv_path}")
-        
+
         if not os.path.exists(self.csv_path):
             logging.error(f"Cannot delete CSV {self.csv_path}: file does not exist")
             return False
-        
+
         try:
             os.remove(self.csv_path)
             logging.debug(f"CSV file successfully deleted: {self.csv_path}")
