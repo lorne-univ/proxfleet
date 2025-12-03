@@ -1,6 +1,6 @@
-import os
-from proxmoxer import ProxmoxAPI
 import logging
+import time
+from proxmoxer import ProxmoxAPI
 
 
 class ProxmoxManager:
@@ -15,17 +15,13 @@ class ProxmoxManager:
             host, user=proxmox_admin, password=proxmox_admin_password, verify_ssl=True
         )
 
-    def liste_vms(self):
+    def list_vms(self):
         """
         List all VMs on the Proxmox server.
         Each server has only one node.
         """
         node = self.proxmox.nodes.get()[0]["node"]
         return self.proxmox.nodes(node).qemu.get()
-
-    def start_vm(self, vmid):
-        node = self.proxmox.nodes.get()[0]["node"]
-        return self.proxmox.nodes(node).qemu(vmid).status.start.post()
 
     def list_users(self):
         """
@@ -73,7 +69,6 @@ class ProxmoxManager:
         password: user password
         comment: optional comment
         """
-
         existing_users = self.proxmox.access.users.get()
         logging.debug("existing_users: {}".format(existing_users))
         if any(u["userid"] == f"{userid}@{realm}" for u in existing_users):
@@ -89,7 +84,6 @@ class ProxmoxManager:
         groupid: group id (e.g. "admins")
         comment: optional comment
         """
-
         existing_groups = self.proxmox.access.groups.get()
         if any(g["groupid"] == groupid for g in existing_groups):
             logging.info(f"Group {groupid} already exists on {self.host}.")
@@ -112,9 +106,7 @@ class ProxmoxManager:
             vlan_interfaces = [
                 iface for iface in interfaces if iface["iface"].endswith(f".{vlan}")
             ]
-            logging.debug(
-                "VLAN {} Network interfaces: {}".format(vlan, vlan_interfaces)
-            )
+            logging.debug("VLAN {} Network interfaces: {}".format(vlan, vlan_interfaces))
             return vlan_interfaces
 
     def add_net_vmbr(self, vmbr_name, comments="", apply=True):
@@ -189,9 +181,7 @@ class ProxmoxManager:
         )
         interfaces_list = self.get_network_interfaces(vlan=vlan_id)
         if len(interfaces_list) == 0:
-            logging.info(
-                f"Interface {interface_name}.{vlan_id} does not exist on {self.host}."
-            )
+            logging.info(f"Interface {interface_name}.{vlan_id} does not exist on {self.host}.")
 
             node = self.proxmox.nodes.get()[0]["node"]
             logging.debug(f"Creating interface {interface_name}.{vlan_id} on {node}")
@@ -201,15 +191,11 @@ class ProxmoxManager:
                 type="vlan",
             )
 
-            logging.info(
-                f"VLAN interface {interface_name}.{vlan_id} created on {self.host}."
-            )
+            logging.info(f"VLAN interface {interface_name}.{vlan_id} created on {self.host}.")
             if apply:
                 self.network_apply()
         else:
-            logging.info(
-                f"Interface {interface_name}.{vlan_id} already exists on {self.host}."
-            )
+            logging.info(f"Interface {interface_name}.{vlan_id} already exists on {self.host}.")
 
     def network_apply(self):
         """
@@ -235,7 +221,6 @@ class ProxmoxManager:
         path: path to the resource (e.g. "/vms/100")
         roles: list of roles to assign (e.g. ["PVEAdmin"])
         """
-
         existing_acl = self.proxmox.access.acl.get()
         logging.debug("existing_acl: {}".format(existing_acl))
         for acl in existing_acl:
@@ -258,7 +243,6 @@ class ProxmoxManager:
         privs: list of privileges (e.g. ["VM.Allocate", "VM.Audit"])
         comment: optional comment
         """
-
         existing_roles = self.proxmox.access.roles.get()
         if any(r["roleid"] == roleid for r in existing_roles):
             logging.info(f"Role {roleid} already exists on {self.host}.")
@@ -274,7 +258,6 @@ class ProxmoxManager:
         poolid: pool id (e.g. "students")
         storageid: storage id (e.g. "local-lvm")
         """
-
         existing_storages = self.proxmox.storage.get()
         logging.debug(
             "Existing_storages on {}: {}".format(self.host, existing_storages)
@@ -330,7 +313,95 @@ class ProxmoxManager:
         )
         logging.info(f"Backup {backup_file} restored on {self.host}.")
 
-    def delete_vm(self, vmid):
+    def get_task_status(self, upid: str):
+        """
+        Get the status of a Proxmox task (by UPID).
+        upid: Task UPID, must start with "UPID:"
+        return: tuple (status: str | None, exitstatus: str | None)
+        """
+        node = self.proxmox.nodes.get()[0]["node"]
+        logging.debug(f"Checking status of task {upid} on node {node}.")
+        if not isinstance(upid, str) or not upid.startswith("UPID:"):
+            logging.error(f"Invalid UPID format: {upid}")
+            raise ValueError(f"Invalid UPID format: {upid}")
+
+        try:
+            task_info = self.proxmox.nodes(node).tasks(upid).status.get()
+            status = task_info.get("status")
+            exitstatus = task_info.get("exitstatus")
+            return status, exitstatus
+        except Exception as e:
+            logging.error(f"Unable to query the status of task {upid}: {e}")
+            return None, None
+
+    def check_task_stopped(self, upid: str, timeout_sec=300):
+        """
+        Check if a Proxmox task (by UPID) has stopped successfully.
+        Blocks until the task is stopped or timeout is reached.
+        upid: Task UPID, must start with "UPID:"
+        timeout_sec: Maximum wait time in seconds (default 300)
+        return: bool (True if task stopped with exitstatus == "OK", False otherwise)
+        """
+        node = self.proxmox.nodes.get()[0]["node"]
+        logging.debug(f"Waiting for task {upid} to complete on node {node} (timeout: {timeout_sec}s).")
+        if not isinstance(upid, str) or not upid.startswith("UPID:"):
+            logging.error(f"Invalid UPID format: {upid}")
+            raise ValueError(f"Invalid UPID format: {upid}")
+
+        start = time.time()
+        while time.time() - start < timeout_sec:
+            try:
+                task_info = self.proxmox.nodes(node).tasks(upid).status.get()
+                status = task_info.get("status")
+                exitstatus = task_info.get("exitstatus")
+                if status == "stopped" and exitstatus == "OK":
+                    return True
+                elif status == "stopped":
+                    error_msg = exitstatus or "Unknown error"
+                    logging.error(f"Task {upid} failed with exitstatus: {error_msg}")
+                    return False 
+            except Exception as e:
+                logging.error(f"Unable to query the status of task {upid}: {e}")
+                return False
+            time.sleep(2)
+        logging.error(f"Timeout: task {upid} did not finish after {timeout_sec} seconds.")
+        return False
+
+    def check_bridge_exists(self, bridge_name: str):
+        """
+        Check if a network bridge exists.
+        bridge_name: Name of the bridge to check
+        return: bool
+        """
+        node = self.proxmox.nodes.get()[0]["node"]
+        logging.debug(f"Checking if bridge '{bridge_name}' exists on node {node}.")
+        try:
+            interfaces = self.proxmox.nodes(node).network.get()
+            return any(iface.get("iface") == bridge_name for iface in interfaces)
+        except Exception as e:
+            logging.error(f"Unable to verify bridge '{bridge_name}' on node {node}: {e}")
+            return False
+
+    def check_pool_exists(self, pool_name: str):
+        """
+        Check if a pool exists.
+        pool_name: Name of the pool to check
+        return: bool
+        """
+        logging.debug(f"Checking if pool '{pool_name}' exists.")
+        try:
+            pools = self.proxmox.pools.get()
+            return any(pool.get("poolid") == pool_name for pool in pools)
+        except Exception as e:
+            logging.error(f"Unable to verify pool '{pool_name}': {e}")
+            return False
+
+    def check_storage_exists(self, storage_name: str):
+        """
+        Check if a storage exists.
+        pool_name: Name of the storage to check
+        return: bool
+        """
         node = self.proxmox.nodes.get()[0]["node"]
         self.proxmox.nodes(node).qemu(vmid).delete()
 
