@@ -42,21 +42,21 @@ def test_full_deployment():
     network_results = networkbridge_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(network_results):
         logging.warning("Some network configs failed")
-    print("Network configured OK\n")
+    print("Configuring OK\n")
 
     # 4. Start
     print("STEP 4/8: Starting VMs")
     start_results = start_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(start_results):
         logging.warning("Some VMs failed to start")
-    print("VMs started OK\n")
+    print("Starting OK\n")
 
     # 5. Get IPs
     print("STEP 5/8: Getting management IPs")
     ip_results = managementip_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(ip_results):
         logging.warning("Some IPs not retrieved")
-    print("IPs retrieved OK\n")
+    print("IPs OK\n")
 
     # 6. Display IPs and wait for user validation
     print("STEP 6/8: Verification of IPs")
@@ -65,27 +65,28 @@ def test_full_deployment():
     delimiter = csv_handler.detect_delimiter()
     rows = csv_handler.read_csv(delimiter)
 
-    print(f"\n{'VMID':<5} {'IPv4 Address':<20} {'Status':<15}")
+    print(f"{'VMID':<5} {'IPv4 Address':<20} {'Status':<15}")
     print("-"*40)
     for row in rows:
         newid = row.get('newid', 'N/A')
         ipv4 = row.get('ipv4', 'N/A')
         status = row.get('status', 'N/A')
         print(f"{newid:<5} {ipv4:<20} {status:<15}")
+    print("\n")
 
     # 7. Stop VMs
-    print("\nSTEP 7/8: Stopping VMs")
+    print("STEP 7/8: Stopping VMs")
     stop_results = stop_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(stop_results):
         logging.warning("Some VMs failed to stop")
-    print("VMs stopped OK\n")
+    print("Stopping OK\n")
 
     # 8. Delete VMs
-    print("\nSTEP 8/8: Deleting VMs")
+    print("STEP 8/8: Deleting VMs")
     delete_results = delete_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(delete_results):
         logging.warning("Some VMs failed to delete")
-    print("VMs deleted OK\n")
+    print("Deleting OK\n")
 
     print("="*70)
     print("FULL DEPLOYMENT TEST COMPLETED")
