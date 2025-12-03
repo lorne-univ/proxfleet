@@ -176,7 +176,7 @@ class ProxmoxVM:
             self.manager.proxmox.nodes(node).qemu(self.vmid).agent("ping").post()
             return True
         except Exception as e:
-            logging.warning(f"Unable to ping agent for VM {self.vmid}: {e}")
+            logging.error(f"Unable to ping agent for VM {self.vmid}: {e}")
             return False
 
     def address(self, addr_type=None):
@@ -228,7 +228,7 @@ class ProxmoxVM:
         logging.debug(f"Searching for management IPv4 address (subnets: {subnets}) for VM {self.vmid}.")
         interfaces = self.address("ipv4")
         if not interfaces:
-            logging.warning(f"No network interfaces detected for VM {self.vmid}.")
+            logging.error(f"No network interfaces detected for VM {self.vmid}.")
             return ""
 
         for subnet in subnets:
@@ -241,7 +241,7 @@ class ProxmoxVM:
                             return self.ipv4_vm
                     except ValueError:
                         continue
-        logging.warning(f"No management IPv4 found for VM {self.vmid}.")
+        logging.error(f"No management IPv4 found for VM {self.vmid}.")
         return ""
 
     def get_network_interfaces(self):

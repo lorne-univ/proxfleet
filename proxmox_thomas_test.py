@@ -17,47 +17,76 @@ proxmox_user = os.getenv('PROXMOX_USER')
 proxmox_password = os.getenv('PROXMOX_PASSWORD')
 
 def test_full_deployment():
-    """Test complet : validation -> clone -> network -> start -> IPs"""
+    """Full deployement : validation → clone → network → start → IPs → stop → delete"""
     print("\n" + "="*70)
-    print("TEST FULL DEPLOYMENT")
+    print("FULL DEPLOYMENT TEST")
     print("="*70 + "\n")
-    
+
     # 1. Validate
-    print("STEP 1/5: Validating CSV")
+    print("STEP 1/8: Validating CSV")
     valid, errors = check_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not valid:
         logging.error(f"Validation failed: {errors}")
         return False
     print("Validation OK\n")
-    
+
     # 2. Clone
-    print("STEP 2/5: Cloning VMs")
+    print("STEP 2/8: Cloning VMs")
     clone_results = clone_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(clone_results):
         logging.warning("Some clones failed")
-    print("Cloning done\n")
-    
+    print("Cloning OK\n")
+
     # 3. Network
-    print("STEP 3/5: Configuring network bridges")
+    print("STEP 3/8: Configuring network bridges")
     network_results = networkbridge_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(network_results):
         logging.warning("Some network configs failed")
-    print("Network configured\n")
-    
+    print("Network configured OK\n")
+
     # 4. Start
-    print("STEP 4/5: Starting VMs")
+    print("STEP 4/8: Starting VMs")
     start_results = start_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(start_results):
         logging.warning("Some VMs failed to start")
-    print("VMs started\n")
-    
+    print("VMs started OK\n")
+
     # 5. Get IPs
-    print("STEP 5/5: Getting management IPs")
+    print("STEP 5/8: Getting management IPs")
     ip_results = managementip_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
     if not all(ip_results):
         logging.warning("Some IPs not retrieved")
-    print("IPs retrieved\n")
-    
+    print("IPs retrieved OK\n")
+
+    # 6. Display IPs and wait for user validation
+    print("STEP 6/8: Verification of IPs")
+    from proxmox_csv import ProxmoxCSV
+    csv_handler = ProxmoxCSV(INPUT_CSV)
+    delimiter = csv_handler.detect_delimiter()
+    rows = csv_handler.read_csv(delimiter)
+
+    print(f"\n{'VMID':<5} {'IPv4 Address':<20} {'Status':<15}")
+    print("-"*40)
+    for row in rows:
+        newid = row.get('newid', 'N/A')
+        ipv4 = row.get('ipv4', 'N/A')
+        status = row.get('status', 'N/A')
+        print(f"{newid:<5} {ipv4:<20} {status:<15}")
+
+    # 7. Stop VMs
+    print("\nSTEP 7/8: Stopping VMs")
+    stop_results = stop_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
+    if not all(stop_results):
+        logging.warning("Some VMs failed to stop")
+    print("VMs stopped OK\n")
+
+    # 8. Delete VMs
+    print("\nSTEP 8/8: Deleting VMs")
+    delete_results = delete_csv(INPUT_CSV, CONFIG_YAML, proxmox_user, proxmox_password)
+    if not all(delete_results):
+        logging.warning("Some VMs failed to delete")
+    print("VMs deleted OK\n")
+
     print("="*70)
     print("FULL DEPLOYMENT TEST COMPLETED")
     print("="*70 + "\n")
