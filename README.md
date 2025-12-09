@@ -5,16 +5,31 @@ The proxmoxer api is mainly used.
 
 ## Project Description
 
-class ProxmoxManager
+### Classes
+
+- **ProxmoxManager** - Handles connection and cluster-level operations (pools, storage, bridges, tasks)
+- **ProxmoxVM** - Handles VM-level operations (clone, start, stop, delete, network, QEMU agent)
+- **ProxmoxCSV** - Handles CSV file parsing and writing
+
+### Bulk Operations
+
+- **bulk_vm_management** - High-level functions to manage multiple VMs from a CSV file
 
 ## Virtual environment
-```
-#In proxfleet directory
+
+```bash
+# In proxfleet directory
 python -m venv venv
-\proxfleet> .\venv\Scripts\Activate.ps1
+
+# Windows (PowerShell)
+.\venv\Scripts\Activate.ps1
+
+# Linux / macOS
+source venv/bin/activate
 ```
 
 ## Environment variables
+
 To set in .env file
 ```
 PROXMOX_USER=root@pam
@@ -58,7 +73,7 @@ Validates CSV file.
 
 **Input:**
 ```python
-from proxmox_thomas import check_csv
+from bulk_vm_management import check_csv
 
 valid, errors = check_csv(INPUT_CSV, CONFIG_YAML, user, password)
 ```
@@ -85,7 +100,7 @@ Dupont;Jean;DupontJ;serveur;vm-test;ubuntu-template;students;local-lvm;;;;;
 
 **Code:**
 ```python
-from proxmox_thomas import clone_csv
+from bulk_vm_management import clone_csv
 
 results = clone_csv(INPUT_CSV, CONFIG_YAML, user, password)
 # Returns: [True, True, False, ...]
@@ -109,7 +124,7 @@ Configures network interfaces from net0/net1 columns.
 
 **Code:**
 ```python
-from proxmox_thomas import networkbridge_csv
+from bulk_vm_management import networkbridge_csv
 
 results = networkbridge_csv(INPUT_CSV, CONFIG_YAML, user, password)
 ```
@@ -122,7 +137,7 @@ Starts stopped VMs.
 
 **Code:**
 ```python
-from proxmox_thomas import start_csv
+from bulk_vm_management import start_csv
 
 results = start_csv(INPUT_CSV, CONFIG_YAML, user, password)
 ```
@@ -139,7 +154,7 @@ Stops running VMs (hard power-off).
 
 **Code:**
 ```python
-from proxmox_thomas import stop_csv
+from bulk_vm_management import stop_csv
 
 results = stop_csv(INPUT_CSV, CONFIG_YAML, user, password)
 ```
@@ -156,7 +171,7 @@ Deletes stopped VMs. Irreversible operation.
 
 **Code:**
 ```python
-from proxmox_thomas import delete_csv
+from bulk_vm_management import delete_csv
 
 # Must stop VMs first
 stop_csv(INPUT_CSV, CONFIG_YAML, user, password)
@@ -175,7 +190,7 @@ Retrieves IPs from running VMs. Requires QEMU Guest Agent.
 
 **Code:**
 ```python
-from proxmox_thomas import managementip_csv
+from bulk_vm_management import managementip_csv
 
 results = managementip_csv(INPUT_CSV, CONFIG_YAML, user, password)
 ```
@@ -190,7 +205,7 @@ results = managementip_csv(INPUT_CSV, CONFIG_YAML, user, password)
 
 ### Complete workflow
 ```python
-from proxmox_thomas import *
+from bulk_vm_management import *
 
 # 1. Validate
 valid, errors = check_csv(INPUT_CSV, CONFIG_YAML, user, password)
@@ -208,11 +223,6 @@ start_csv(INPUT_CSV, CONFIG_YAML, user, password)
 
 # 5. Get IPs
 managementip_csv(INPUT_CSV, CONFIG_YAML, user, password)
-```
-
-Or run the automated script:
-```bash
-python proxmox_thomas.py
 ```
 
 ## Git - Github
@@ -253,7 +263,7 @@ git push origin feature/<your-feature-name>
 
 Create a Pull Request (PR):
 1. Go to the GitHub repository page.  
-2. Click **“Pull requests”**.  
+2. Click **"Pull requests"**.  
 3. Add a short but clear description of your changes.  
 4. Submit your PR for review.
 

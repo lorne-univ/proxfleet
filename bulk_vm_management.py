@@ -7,6 +7,60 @@ from proxmox_vm import ProxmoxVM
 from proxmox_csv import ProxmoxCSV
 
 
+def load_csv_and_connections(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
+    """
+    Load CSV file, YAML configuration, and establish Proxmox connections.
+    csv_path: file path (csv file)
+    config_yaml: file path (proxmox server hostname)
+    proxmox_user: user@pam // admin: 'root@pam'
+    proxmox_password: password
+    return: tuple (csv_handler, delimiter, rows, connections) or (None, None, None, None) if critical error
+    """
+    # 1. Load CSV data
+    logging.debug(f"[LOAD] Loading CSV file: {csv_path}")
+    csv_handler = ProxmoxCSV(csv_path)
+    delimiter = csv_handler.detect_delimiter()
+    rows = csv_handler.read_csv(delimiter)
+    if not rows:
+        logging.error("CSV file is empty or unreadable.")
+        return None, None, None, None
+
+    # 2. Load YAML configuration
+    logging.debug(f"[LOAD] Loading configuration file: {config_yaml}")
+    try:
+        with open(config_yaml, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            servers = config.get("servers", [])
+        logging.debug(f"Configuration loaded: {len(servers)} servers found.")
+    except Exception as e:
+        logging.error(f"Unable to load YAML config '{config_yaml}': {e}")
+        return None, None, None, None
+
+    # 3. Prepare Proxmox connections
+    logging.debug("[LOAD] Preparing Proxmox connections.")
+    connections = {"user": proxmox_user, "password": proxmox_password}
+    unique_hosts = set(row["target_host"] for row in rows if row.get("target_host"))
+
+    for target_host in unique_hosts:
+        server_entry = next((s for s in servers if s["host"] == target_host), None)
+        if not server_entry:
+            logging.error(f"Server '{target_host}' not found in config.")
+            continue
+        proxmox_host = server_entry.get("usmb-tri")
+        if not proxmox_host:
+            logging.error(f"No 'usmb-tri' entry for server '{target_host}'.")
+            continue
+
+        try:
+            manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
+            connections[target_host] = {"manager": manager, "proxmox_host": proxmox_host}
+            logging.debug(f"Connected to {target_host} ({proxmox_host})")
+        except Exception as e:
+            logging.error(f"Failed to connect to {target_host}: {e}")
+
+    logging.debug(f"[LOAD] Connections ready: {len(connections) - 2} hosts connected.")
+    return csv_handler, delimiter, rows, connections
+
 def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
     """
     Validate the content of a CSV file (before cloning VMs).
@@ -14,11 +68,11 @@ def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
     config_yaml: file path (proxmox server hostname)
     proxmox_user: user@pam // admin: 'root@pam'
     proxmox_password: password
-    return: tuple[bool, list[dict]] → if OK (True, []), else (False, [{"line": X, "errors": [list of failed fields]}])
+    return: tuple[bool, list[dict]] â†’ if OK (True, []), else (False, [{"line": X, "errors": [list of failed fields]}])
     """
     logging.debug(f"Starting CSV validation for file: {input_csv}")
 
-    # 1: Load the configuration file (YAML)
+    # 1. Load the configuration file (YAML)
     logging.debug(f"[STEP 1] Loading configuration file: {config_yaml}")
     try:
         with open(config_yaml, "r", encoding="utf-8") as f:
@@ -29,7 +83,7 @@ def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
         logging.error(f"Unable to load YAML config '{config_yaml}': {e}")
         return False, [{"line": 0, "errors": ["config_yaml"]}]
 
-    # 2: Read and parse the CSV file
+    # 2. Read and parse the CSV file
     logging.debug(f"[STEP 2] Opening and reading CSV file: {input_csv}")
     csv_handler = ProxmoxCSV(input_csv)
     delimiter = csv_handler.detect_delimiter()
@@ -48,12 +102,12 @@ def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
         logging.error("CSV is empty or unreadable.")
         return False, [{"line": 0, "errors": ["empty_csv"]}]
 
-    # 3: Prepare Proxmox connections per target host
+    # 3. Prepare Proxmox connections per target host
     logging.debug("[STEP 3] Preparing Proxmox connections per target host.")
     connections = {}
     errors = []
 
-    # 4: Validate each CSV line
+    # 4. Validate each CSV line
     logging.debug("[STEP 4] Starting per-line validation.")
     for i, row in enumerate(rows, start=2):
         logging.debug(f"Validating CSV line {i}: {row}")
@@ -65,7 +119,6 @@ def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
 
         if not ((student_name and student_firstname) or student_login):
             line_errors.append("student_identity")
-
         if not target_host:
             line_errors.append("target_host")
             errors.append({"line": i, "errors": line_errors})
@@ -137,7 +190,7 @@ def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
         else:
             logging.debug(f"Line {i} valid.")
 
-    # 5: Final summary
+    # 5. Final summary
     logging.debug("[STEP 5] CSV validation completed. Summarizing results.")
     if errors:
         logging.error(f"CSV validation failed with {len(errors)} invalid line(s).")
@@ -160,56 +213,14 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
     """  
     logging.debug(f"Starting VM cloning for file: {input_csv}")
 
-    # 1. Load CSV data
-    logging.debug(f"[STEP 1/5] Loading CSV file: {input_csv}")
-    csv_handler = ProxmoxCSV(input_csv)
-    delimiter = csv_handler.detect_delimiter()
-    rows = csv_handler.read_csv(delimiter)
-    if not rows:
-        logging.error("CSV file is empty or unreadable.")
+    # 1. Load CSV, config and connections
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(input_csv, config_yaml, proxmox_user, proxmox_password)
+    if rows is None:
         return []
-
-    # 2. Load YAML configuration
-    logging.debug(f"[STEP 2/5] Loading configuration file: {config_yaml}")
-    try:
-        with open(config_yaml, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-            servers = config.get("servers", [])
-        logging.debug(f"Configuration loaded: {len(servers)} servers found.")
-    except Exception as e:
-        logging.error(f"Unable to load YAML config '{config_yaml}': {e}")
-        return []
-
-    # 3. Prepare Proxmox connections
-    logging.debug("[STEP 3/5] Preparing Proxmox connections.")
-    connections = {"user": proxmox_user,"password": proxmox_password}
     results_map = {}
-    unique_hosts = set(row["target_host"] for row in rows if not row.get("status"))
 
-    for target_host in unique_hosts:
-        server_entry = next((s for s in servers if s["host"] == target_host), None)
-        if not server_entry:
-            logging.error(f"Server '{target_host}' not found in config.")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and not row.get("status"):
-                    results_map[i] = False
-                    rows[i]["status"] = "error"
-            continue
-        proxmox_host = server_entry["usmb-tri"]
-
-        try:
-            manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
-            connections[target_host] = {"manager": manager, "proxmox_host": proxmox_host}
-            logging.debug(f"Connected to {target_host} ({proxmox_host})")
-        except Exception as e:
-            logging.error(f"Failed to connect to {target_host}: {e}")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and not row.get("status"):
-                    results_map[i] = False
-                    rows[i]["status"] = "error"
-
-    # 4. Launch all clones
-    logging.debug("[STEP 4/5] Launching clone operations.")
+    # 2. Launch all clones
+    logging.debug("[CLONE] Launching clone operations.")
     clone_tasks = []
     for i, row in enumerate(rows):
         if row.get("status"):
@@ -225,7 +236,6 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
 
         manager = connections[target_host]["manager"]
         proxmox_host = connections[target_host]["proxmox_host"]
-
         vm_name = row.get("vm_name")
         if not vm_name:
             student_login = row.get("student_login")
@@ -243,7 +253,7 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
                     continue
         logging.debug(f"[{i+1}/{len(rows)}] VM name determined: {vm_name}")
 
-        vm_temp = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, 0)
+        vm_temp = ProxmoxVM(proxmox_host, connections["user"], connections["password"], 0)
         template_name = row["template_name"]
         template_found, template_vmid = vm_temp.search_name(template_name, template=True)
 
@@ -279,7 +289,7 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
             rows[i]["status"] = "error"
             continue
 
-        vm_helper = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, template_vmid)
+        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], template_vmid)
         vm_helper.template_vm = template_vmid
         vm_helper.newid = newid
         vm_helper.name_vm = vm_name
@@ -290,16 +300,16 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
         upid = vm_helper.clone_vm()
         if upid:
             clone_tasks.append({"upid": upid, "row_index": i, "vm_name": vm_name, "manager": manager, "target_host": target_host, "vm_name_generated": vm_name, "newid_generated": newid})
-            logging.debug(f"[{i+1}/{len(rows)}] Clone launched successfully → UPID: {upid}")
+            logging.debug(f"[{i+1}/{len(rows)}] Clone launched successfully â†’ UPID: {upid}")
         else:
             logging.error(f"[{i+1}/{len(rows)}] Failed to launch clone for {vm_name}")
             results_map[i] = False
             rows[i]["status"] = "error"
     logging.debug(f"Launch phase completed: {len(clone_tasks)} clones started")
 
-    # 5. Monitor all clones in parallel
+    # 3. Monitor all clones in parallel
     if clone_tasks:
-        logging.debug("[STEP 5/5] Monitoring clone progress in parallel.")   
+        logging.debug("[CLONE] Monitoring clone progress in parallel.")   
         monitor_results = asyncio.run(_monitor_all_clones(clone_tasks))
         for result in monitor_results:
             row_index = result["row_index"]
@@ -318,9 +328,9 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
                 rows[row_index]["status"] = "error"
 
     else:
-        logging.debug("[STEP 5/5] No clones to monitor (all skipped or failed to launch)")
+        logging.debug("[CLONE] No clones to monitor (all skipped or failed to launch)")
 
-    # 6. Update CSV with results
+    # 4. Save CSV
     header = csv_handler.read_header(delimiter)
     success = csv_handler.write_csv(rows, header, delimiter)
     if success:
@@ -328,7 +338,7 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
     else:
         logging.error(f"Failed to update CSV: {input_csv}")
 
-    # 7. Summary
+    # 5. Summary
     logging.debug("Clone Operations Completed")
     skipped = sum(1 for i, success in results_map.items() if success and rows[i].get("status") != "cloned")
     successes = sum(1 for i, success in results_map.items() if success and rows[i].get("status") == "cloned")
@@ -403,54 +413,14 @@ def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwo
     """
     logging.debug("Starting VMs from CSV")
 
-    # 1. Load CSV data
-    logging.debug(f"[STEP 1/4] Loading CSV file: {csv_path}")
-    csv_handler = ProxmoxCSV(csv_path)
-    delimiter = csv_handler.detect_delimiter()
-    rows = csv_handler.read_csv(delimiter)
-    if not rows:
-        logging.error("CSV file is empty or unreadable.")
+    # 1. Load CSV, config and connections
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    if rows is None:
         return []
-
-    # 2. Load YAML configuration
-    logging.debug(f"[STEP 2/4] Loading configuration file: {config_yaml}")
-    try:
-        with open(config_yaml, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-            servers = config.get("servers", [])
-        logging.debug(f"Configuration loaded: {len(servers)} servers found.")
-    except Exception as e:
-        logging.error(f"Unable to load YAML config '{config_yaml}': {e}")
-        return [False] * len(rows)
-
-    # 3. Prepare Proxmox connections
-    logging.debug("[STEP 3/4] Preparing Proxmox connections.")
-    connections = {"user": proxmox_user, "password": proxmox_password}
     results_map = {}
-    unique_hosts = set(row["target_host"] for row in rows if row.get("newid"))
 
-    for target_host in unique_hosts:
-        server_entry = next((s for s in servers if s["host"] == target_host), None)
-        if not server_entry:
-            logging.error(f"Server '{target_host}' not found in config.")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-            continue
-
-        proxmox_host = server_entry["usmb-tri"]
-        try:
-            manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
-            connections[target_host] = {"manager": manager, "proxmox_host": proxmox_host}
-            logging.debug(f"Connected to {target_host} ({proxmox_host})")
-        except Exception as e:
-            logging.error(f"Failed to connect to {target_host}: {e}")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-
-    # 4. Start VMs
-    logging.debug("[STEP 4/4] Starting VMs.")
+    # 2. Start VMs
+    logging.debug("[START] Starting VMs.")
     for i, row in enumerate(rows):
         newid_str = row.get("newid", "").strip()
         if not newid_str:
@@ -475,7 +445,7 @@ def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwo
             continue
 
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, newid)
+        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
         exists, _ = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")
@@ -516,7 +486,7 @@ def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwo
             results_map[i] = False
             row["status"] = "error"
 
-    # 5. Save CSV
+    # 3. Save CSV
     header = csv_handler.read_header(delimiter)
     success = csv_handler.write_csv(rows, header, delimiter)
     if success:
@@ -524,7 +494,7 @@ def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwo
     else:
         logging.error(f"Failed to update CSV: {csv_path}")
 
-    # 6. Summary
+    # 4. Summary
     logging.debug("Start Operations Completed")    
     total = len(rows)
     started = sum(1 for i, r in results_map.items() if r and rows[i].get("newid"))
@@ -548,54 +518,14 @@ def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwor
     """
     logging.debug("Stopping VMs from CSV")
 
-    # 1. Load CSV data
-    logging.debug(f"[STEP 1/4] Loading CSV file: {csv_path}")
-    csv_handler = ProxmoxCSV(csv_path)
-    delimiter = csv_handler.detect_delimiter()
-    rows = csv_handler.read_csv(delimiter)
-    if not rows:
-        logging.error("CSV file is empty or unreadable.")
+    # 1. Load CSV, config and connections
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    if rows is None:
         return []
-
-    # 2. Load YAML configuration
-    logging.debug(f"[STEP 2/4] Loading configuration file: {config_yaml}")
-    try:
-        with open(config_yaml, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-            servers = config.get("servers", [])
-        logging.debug(f"Configuration loaded: {len(servers)} servers found.")
-    except Exception as e:
-        logging.error(f"Unable to load YAML config '{config_yaml}': {e}")
-        return [False] * len(rows)
-
-    # 3. Prepare Proxmox connections
-    logging.debug("[STEP 3/4] Preparing Proxmox connections.")
-    connections = {"user": proxmox_user, "password": proxmox_password}
     results_map = {}
-    unique_hosts = set(row["target_host"] for row in rows if row.get("newid"))
 
-    for target_host in unique_hosts:
-        server_entry = next((s for s in servers if s["host"] == target_host), None)
-        if not server_entry:
-            logging.error(f"Server '{target_host}' not found in config.")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-            continue
-
-        proxmox_host = server_entry["usmb-tri"]
-        try:
-            manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
-            connections[target_host] = {"manager": manager, "proxmox_host": proxmox_host}
-            logging.debug(f"Connected to {target_host} ({proxmox_host})")
-        except Exception as e:
-            logging.error(f"Failed to connect to {target_host}: {e}")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-
-    # 4. Stop VMs
-    logging.debug("[STEP 4/4] Stopping VMs.")
+    # 2. Stop VMs
+    logging.debug("[STOP] Stopping VMs.")
     for i, row in enumerate(rows):
         newid_str = row.get("newid", "").strip()
         if not newid_str:
@@ -620,7 +550,7 @@ def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwor
             continue
 
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, newid)
+        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
         exists, _ = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")
@@ -661,7 +591,7 @@ def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwor
             results_map[i] = False
             row["status"] = "error"
 
-    # 5. Save CSV
+    # 3. Save CSV
     header = csv_handler.read_header(delimiter)
     success = csv_handler.write_csv(rows, header, delimiter)
     if success:
@@ -669,7 +599,7 @@ def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwor
     else:
         logging.error(f"Failed to update CSV: {csv_path}")
 
-    # 6. Summary
+    # 4. Summary
     logging.debug("Stop Operations Completed")
     total = len(rows)
     stopped = sum(1 for i, r in results_map.items() if r and rows[i].get("newid"))
@@ -693,54 +623,14 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
     """
     logging.debug("Deleting VMs from CSV")
 
-    # 1. Load CSV data
-    logging.debug(f"[STEP 1/4] Loading CSV file: {csv_path}")
-    csv_handler = ProxmoxCSV(csv_path)
-    delimiter = csv_handler.detect_delimiter()
-    rows = csv_handler.read_csv(delimiter)
-    if not rows:
-        logging.error("CSV file is empty or unreadable.")
+    # 1. Load CSV, config and connections
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    if rows is None:
         return []
-
-    # 2. Load YAML configuration
-    logging.debug(f"[STEP 2/4] Loading configuration file: {config_yaml}")
-    try:
-        with open(config_yaml, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-            servers = config.get("servers", [])
-        logging.debug(f"Configuration loaded: {len(servers)} servers found.")
-    except Exception as e:
-        logging.error(f"Unable to load YAML config '{config_yaml}': {e}")
-        return [False] * len(rows)
-
-    # 3. Prepare Proxmox connections
-    logging.debug("[STEP 3/4] Preparing Proxmox connections.")
-    connections = {"user": proxmox_user, "password": proxmox_password}
     results_map = {}
-    unique_hosts = set(row["target_host"] for row in rows if row.get("newid"))
 
-    for target_host in unique_hosts:
-        server_entry = next((s for s in servers if s["host"] == target_host), None)
-        if not server_entry:
-            logging.error(f"Server '{target_host}' not found in config.")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-            continue
-
-        proxmox_host = server_entry["usmb-tri"]
-        try:
-            manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
-            connections[target_host] = {"manager": manager, "proxmox_host": proxmox_host}
-            logging.debug(f"Connected to {target_host} ({proxmox_host})")
-        except Exception as e:
-            logging.error(f"Failed to connect to {target_host}: {e}")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-
-    # 4. Delete VMs
-    logging.debug("[STEP 4/4] Deleting VMs.")
+    # 2. Delete VMs
+    logging.debug("[DELETE] Deleting VMs.")
     for i, row in enumerate(rows):
         newid_str = row.get("newid", "").strip()
         if not newid_str:
@@ -765,7 +655,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
             continue
         
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, newid)
+        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
         exists, actual_vm_name = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host} - marking as success")
@@ -810,7 +700,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
             results_map[i] = False
             row["status"] = "error"
 
-    # 5. Save CSV
+    # 3. Save CSV
     header = csv_handler.read_header(delimiter)
     success = csv_handler.write_csv(rows, header, delimiter)
     if success:
@@ -818,7 +708,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
     else:
         logging.error(f"Failed to update CSV: {csv_path}")
 
-    # 6. Summary
+    # 4. Summary
     logging.debug("Delete Operations Completed")
     total = len(rows)
     deleted = sum(1 for i, r in results_map.items() if r and rows[i].get("newid"))
@@ -844,54 +734,14 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
     """
     logging.debug("Updating network bridges from CSV")
 
-    # 1. Load CSV data
-    logging.debug(f"[STEP 1/4] Loading CSV file: {csv_path}")
-    csv_handler = ProxmoxCSV(csv_path)
-    delimiter = csv_handler.detect_delimiter()
-    rows = csv_handler.read_csv(delimiter)
-    if not rows:
-        logging.error("CSV file is empty or unreadable.")
+    # 1. Load CSV, config and connections
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    if rows is None:
         return []
-
-    # 2. Load YAML configuration
-    logging.debug(f"[STEP 2/4] Loading configuration file: {config_yaml}")
-    try:
-        with open(config_yaml, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-            servers = config.get("servers", [])
-        logging.debug(f"Configuration loaded: {len(servers)} servers found.")
-    except Exception as e:
-        logging.error(f"Unable to load YAML config '{config_yaml}': {e}")
-        return [False] * len(rows)
-
-    # 3. Prepare Proxmox connections
-    logging.debug("[STEP 3/4] Preparing Proxmox connections.")
-    connections = {"user": proxmox_user, "password": proxmox_password}
     results_map = {}
-    unique_hosts = set(row["target_host"] for row in rows if row.get("newid"))
 
-    for target_host in unique_hosts:
-        server_entry = next((s for s in servers if s["host"] == target_host), None)
-        if not server_entry:
-            logging.error(f"Server '{target_host}' not found in config.")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-            continue
-
-        proxmox_host = server_entry["usmb-tri"]
-        try:
-            manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
-            connections[target_host] = {"manager": manager, "proxmox_host": proxmox_host}
-            logging.debug(f"Connected to {target_host} ({proxmox_host})")
-        except Exception as e:
-            logging.error(f"Failed to connect to {target_host}: {e}")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-
-    # 4. Update network bridges
-    logging.debug("[STEP 4/4] Updating network bridges.")
+    # 2. Update network bridges
+    logging.debug("[NETWORK] Updating network bridges.")
     for i, row in enumerate(rows):
         newid_str = row.get("newid", "").strip()
         if not newid_str:
@@ -907,7 +757,6 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
             continue
 
         vm_name = row.get("vm_name", f"VM-{newid}")
-
         net0 = row.get("net0", "").strip()
         net1 = row.get("net1", "").strip()
         if not net0 and not net1:
@@ -922,8 +771,7 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
             continue
 
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, newid)
-        
+        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
         exists, _ = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")
@@ -976,7 +824,7 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
         else:
             logging.error(f"[{i+1}/{len(rows)}] Failed to update network bridges for VM {vm_name}")
 
-    # 5. Summary
+    # 3. Summary
     logging.debug("Network Bridge Update Operations Completed")
     total = len(rows)
     updated = sum(1 for i, r in results_map.items() if r and rows[i].get("newid"))
@@ -1002,54 +850,14 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
     """
     logging.debug("Retrieving management IP addresses from running VMs (sequential mode)")
 
-    # 1. Load CSV data
-    logging.debug(f"[STEP 1/4] Loading CSV file: {csv_path}")
-    csv_handler = ProxmoxCSV(csv_path)
-    delimiter = csv_handler.detect_delimiter()
-    rows = csv_handler.read_csv(delimiter)
-    if not rows:
-        logging.error("CSV file is empty or unreadable.")
+    # 1. Load CSV, config and connections
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    if rows is None:
         return []
-
-    # 2. Load YAML configuration
-    logging.debug(f"[STEP 2/4] Loading configuration file: {config_yaml}")
-    try:
-        with open(config_yaml, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-            servers = config.get("servers", [])
-        logging.debug(f"Configuration loaded: {len(servers)} servers found.")
-    except Exception as e:
-        logging.error(f"Unable to load YAML config '{config_yaml}': {e}")
-        return [False] * len(rows)
-
-    # 3. Prepare Proxmox connections
-    logging.debug("[STEP 3/4] Preparing Proxmox connections.")
-    connections = {"user": proxmox_user, "password": proxmox_password}
     results_map = {}
-    unique_hosts = set(row["target_host"] for row in rows if row.get("newid"))
 
-    for target_host in unique_hosts:
-        server_entry = next((s for s in servers if s["host"] == target_host), None)
-        if not server_entry:
-            logging.error(f"Server '{target_host}' not found in config.")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-            continue
-
-        proxmox_host = server_entry["usmb-tri"]
-        try:
-            manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
-            connections[target_host] = {"manager": manager, "proxmox_host": proxmox_host}
-            logging.debug(f"Connected to {target_host} ({proxmox_host})")
-        except Exception as e:
-            logging.error(f"Failed to connect to {target_host}: {e}")
-            for i, row in enumerate(rows):
-                if row["target_host"] == target_host and row.get("newid"):
-                    results_map[i] = False
-
-    # 4. Process VMs sequentially
-    logging.debug("[STEP 4/4] Retrieving management IPs sequentially.")
+    # 2. Process VMs sequentially
+    logging.debug("[IP] Retrieving management IPs sequentially.")
     for i, row in enumerate(rows):
         newid_str = row.get("newid", "").strip()
 
@@ -1076,7 +884,7 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
             continue
 
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, newid)
+        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
         exists, _ = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")
@@ -1151,7 +959,7 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
                 rows[i]["ipv4"] = ""
                 results_map[i] = False
 
-    # 5. Save CSV
+    # 3. Save CSV
     header = csv_handler.read_header(delimiter)
     success = csv_handler.write_csv(rows, header, delimiter)
     if success:
@@ -1159,7 +967,7 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
     else:
         logging.error(f"Failed to update CSV: {csv_path}")
 
-    # 6. Summary
+    # 4. Summary
     logging.debug("Management IP Retrieval Operations Completed")
     total = len(rows)
     retrieved = sum(1 for r in results_map.values() if r)

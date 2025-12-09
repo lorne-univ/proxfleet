@@ -1,4 +1,4 @@
-from proxmox_thomas import *
+from bulk_vm_management import *
 from dotenv import load_dotenv
 import logging
 import os
