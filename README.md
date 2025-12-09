@@ -45,6 +45,7 @@ PROXMOX_PASSWORD=XXXX
 
 ### CSV Template
 
+The program detects the delimiter (`;` by default, or `,`).
 ```
 student_name;student_firstname;student_login;target_host;vm_name;template_name;pool;storage;newid;net0;net1;ipv4;status
 ```
