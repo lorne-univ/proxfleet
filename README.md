@@ -1,7 +1,11 @@
 # PROXFLEET
 
 A set of tools to manage Proxmox Servers that are in a clusterless configuration.
-The proxmoxer api is mainly used.
+
+## Informations
+
+The Python library used is **proxmoxer**.  
+The Proxmox API documentation is available here: [Proxmox API Documentation](https://pve.proxmox.com/pve-docs/api-viewer/index.html)
 
 ## Project Description
 
@@ -15,7 +19,7 @@ The proxmoxer api is mainly used.
 
 - **bulk_vm_management** - High-level functions to manage multiple VMs from a CSV file
 
-## Virtual environment
+### Virtual environment
 
 ```bash
 # In proxfleet directory
@@ -31,7 +35,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Environment variables
+### Environment variables
 
 To set in .env file
 ```
@@ -39,10 +43,11 @@ PROXMOX_USER=root@pam
 PROXMOX_PASSWORD=XXXX
 ```
 
-## Informations
+### CSV Template
 
-The Python library used is **proxmoxer**.  
-The Proxmox API documentation is available here: [Proxmox API Documentation](https://pve.proxmox.com/pve-docs/api-viewer/index.html)
+```
+student_name;student_firstname;student_login;target_host;vm_name;template_name;pool;storage;newid;net0;net1;ipv4;status
+```
 
 ## How to use
 
