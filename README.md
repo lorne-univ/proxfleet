@@ -22,10 +22,13 @@ The proxmoxer api is mainly used.
 python -m venv venv
 
 # Windows (PowerShell)
-.\venv\Scripts\Activate.ps1
+.\venv\scripts\activate.ps1
 
 # Linux / macOS
 source venv/bin/activate
+
+# Librairies for the projet
+pip install -r requirements.txt
 ```
 
 ## Environment variables
