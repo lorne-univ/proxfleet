@@ -47,6 +47,7 @@ The Proxmox API documentation is available here: [Proxmox API Documentation](htt
 ## How to use
 
 ### Setup
+
 ```python
 import os
 from dotenv import load_dotenv
@@ -207,6 +208,7 @@ results = managementip_csv(INPUT_CSV, CONFIG_YAML, user, password)
 **Timeout:** 3 minutes per VM.
 
 ### Complete workflow
+
 ```python
 from bulk_vm_management import *
 
