@@ -21,17 +21,23 @@ The Proxmox API documentation is available here: [Proxmox API Documentation](htt
 
 ### Virtual environment
 
+In proxfleet directory
 ```bash
-# In proxfleet directory
 python -m venv venv
+```
 
-# Windows (PowerShell)
+Windows (PowerShell)
+```pwsh
 .\venv\scripts\activate.ps1
+```
 
-# Linux / macOS
+Linux / macOS
+```bash
 source venv/bin/activate
+```
 
-# Librairies for the projet
+Librairies for the projet
+```bash
 pip install -r requirements.txt
 ```
 
