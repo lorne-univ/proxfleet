@@ -27,7 +27,7 @@ python -m venv venv
 ```
 
 Windows (PowerShell)
-```pwsh
+```powershell
 .\venv\scripts\activate.ps1
 ```
 
