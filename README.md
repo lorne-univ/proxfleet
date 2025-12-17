@@ -79,13 +79,14 @@ python bulk_vm_management_main.py -f 'file.csv' -a 'action' [options]
 
 ### Prerequisites
 
--Docker installed on your system
+- Docker installed on your system
 
--All project files in the proxfleet/ directory
+- All project files in the proxfleet/ directory
 
 ### Build the Docker Image
 
 Navigate to the project directory and build the image:
+
 ```bash
 cd proxfleet/
 docker build --platform linux/amd64 -t proxfleet:latest .
@@ -94,6 +95,7 @@ docker build --platform linux/amd64 -t proxfleet:latest .
 ### Verify the Build
 
 Check that the image was created successfully:
+
 ```bash
 docker images | grep proxfleet
 ```
@@ -121,75 +123,39 @@ docker run --rm \
 
 **Explanation of flags:**
 
-- --rm : Automatically remove container after execution
-- --platform linux/amd64 : Ensure AMD64 architecture compatibility
-- --network host : Use host network (required to access Proxmox servers)
-- -v $(pwd)/file.csv:/app/file.csv:rw : Mount CSV file with read-write permissions
-- -e VARIABLE=value : Set environment variables for authentication
-- -f file.csv : CSV file to process (inside container path)
-- -a ACTION : Action to perform
-- --debug LEVEL : Debug level (none, info, debug)
+- **--rm** : *Automatically remove container after execution*
+- **--platform linux/amd64** : *Ensure AMD64 architecture compatibility*
+- **--network host** : *Use host network (required to access Proxmox servers)*
+- **-v $(pwd)/file.csv:/app/file.csv:rw** : *Mount CSV file with read-write permissions*
+- **-e VARIABLE=value** : *Set environment variables for authentication*
+- **-f file.csv** : *CSV file to process (inside container path)*
+- **-a ACTION** : *Action to perform*
+- **--debug LEVEL** : *Debug level (none, info, debug)*
 
 ### Docker Examples
 
 **Example 1: Validate CSV**
 
 ```bash
-docker run --rm \
-  --platform linux/amd64 \
-  --network host \
-  -v $(pwd)/test.csv:/app/test.csv:rw \
-  -e PROXMOX_USER=root@pam \
-  -e PROXMOX_USE_TOKEN=true \
-  -e PROXMOX_TOKEN_NAME=token \
-  -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx \
-  proxfleet:latest \
-  -f test.csv -a validation
+docker run --rm --platform linux/amd64 --network host -v $(pwd)/test.csv:/app/test.csv:rw -e PROXMOX_USER=root@pam -e PROXMOX_USE_TOKEN=true -e PROXMOX_TOKEN_NAME=token -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx proxfleet:latest -f test.csv -a validation
 ```
 
 **Example 2: Full Deployment Workflow**
 
 ```bash
-docker run --rm \
-  --platform linux/amd64 \
-  --network host \
-  -v $(pwd)/test.csv:/app/test.csv:rw \
-  -e PROXMOX_USER=root@pam \
-  -e PROXMOX_USE_TOKEN=true \
-  -e PROXMOX_TOKEN_NAME=token \
-  -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx \
-  proxfleet:latest \
-  -f test.csv -a deployment --debug info
+docker run --rm --platform linux/amd64 --network host -v $(pwd)/test.csv:/app/test.csv:rw -e PROXMOX_USER=root@pam -e PROXMOX_USE_TOKEN=true -e PROXMOX_TOKEN_NAME=token -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx proxfleet:latest -f test.csv -a deployment
 ```
 
-Example 3: Stop VMs
+**Example 3: Stop VMs**
 
 ```bash
-docker run --rm \
-  --platform linux/amd64 \
-  --network host \
-  -v $(pwd)/test.csv:/app/test.csv:rw \
-  -e PROXMOX_USER=root@pam \
-  -e PROXMOX_USE_TOKEN=true \
-  -e PROXMOX_TOKEN_NAME=token \
-  -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx \
-  proxfleet:latest \
-  -f test.csv -a stop
+docker run --rm --platform linux/amd64 --network host -v $(pwd)/test.csv:/app/test.csv:rw -e PROXMOX_USER=root@pam -e PROXMOX_USE_TOKEN=true -e PROXMOX_TOKEN_NAME=token -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx proxfleet:latest -f test.csv -a stop
 ```
 
 **Example 4: Delete VMs**
 
 ```bash
-docker run --rm \
-  --platform linux/amd64 \
-  --network host \
-  -v $(pwd)/test.csv:/app/test.csv:rw \
-  -e PROXMOX_USER=root@pam \
-  -e PROXMOX_USE_TOKEN=true \
-  -e PROXMOX_TOKEN_NAME=token \
-  -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx \
-  proxfleet:latest \
-  -f test.csv -a delete
+docker run --rm --platform linux/amd64 --network host -v $(pwd)/test.csv:/app/test.csv:rw -e PROXMOX_USER=root@pam -e PROXMOX_USE_TOKEN=true -e PROXMOX_TOKEN_NAME=token -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx proxfleet:latest -f test.csv -a delete
 ```
 
 ## CLI Arguments Reference
