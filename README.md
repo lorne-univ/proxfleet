@@ -11,13 +11,14 @@ The Proxmox API documentation is available here: [Proxmox API Documentation](htt
 
 ### Classes
 
+- **ProxmoxCSV** - Handles CSV file parsing and writing
 - **ProxmoxManager** - Handles connection and cluster-level operations (pools, storage, bridges, tasks)
 - **ProxmoxVM** - Handles VM-level operations (clone, start, stop, delete, network, QEMU agent)
-- **ProxmoxCSV** - Handles CSV file parsing and writing
 
 ### Bulk Operations
 
 - **bulk_vm_management** - High-level functions to manage multiple VMs from a CSV file
+- **bulk_vm_management_main** - CLI interface for bulk operations
 
 ### Virtual environment
 
@@ -41,14 +42,6 @@ Librairies for the projet
 pip install -r requirements.txt
 ```
 
-### Environment variables
-
-To set in .env file
-```
-PROXMOX_USER=root@pam
-PROXMOX_PASSWORD=XXXX
-```
-
 ### CSV Template
 
 The program detects the delimiter (`;` by default, or `,`).
@@ -58,18 +51,71 @@ student_name;student_firstname;student_login;target_host;vm_name;template_name;p
 
 ## How to use
 
-### Setup
+### Basic syntax
 
-```python
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-CONFIG_YAML = "config.yaml"
-INPUT_CSV = "test.csv"
-user = os.getenv('PROXMOX_USER')
-password = os.getenv('PROXMOX_PASSWORD')
+```bash
+python bulk_vm_management_main.py -f 'file.csv' -a 'action' [options]
 ```
+
+### Available Actions
+
+| Action | Description | Updates CSV |
+|--------|-------------|-------------|
+| `validation` | Validate CSV before any operation | No |
+| `clone` | Clone VMs from templates | Yes (status, vm_name, newid) |
+| `network_bridge` | Configure network bridges | No |
+| `start` | Start VMs | Yes (status) |
+| `stop` | Stop VMs | Yes (status) |
+| `delete` | Delete VMs permanently | Yes (status, ipv4, newid) |
+| `management_ip` | Retrieve management IPs from VMs | Yes (ipv4) |
+| `deployment` | Full workflow (validation → clone → network → start → IPs) | Yes (all) |
+
+### Password Authentication
+
+```bash
+python bulk_vm_management_main.py \
+  -f students.csv \
+  -u root@pam \
+  -p myPassword123 \
+  -a validation
+```
+
+### Token Authentication
+
+```bash
+python bulk_vm_management_main.py \
+  -f students.csv \
+  -u durandth@pam \
+  --use-token \
+  --token-name token \
+  --token-value XXXXXX \
+  -a validation
+```
+
+### Environment Variables Authentication
+
+Create a `.env` file or export variables:
+
+**For Password:**
+```bash
+export PROXMOX_USER=root@pam
+export PROXMOX_PASSWORD=myPassword123
+```
+
+**For Token:**
+```bash
+export PROXMOX_USER=root@pam
+export PROXMOX_USE_TOKEN=true
+export PROXMOX_TOKEN_NAME=token
+export PROXMOX_TOKEN_VALUE=123456789ABCDEF
+```
+
+Then run without credentials in command:
+```bash
+python bulk_vm_management_main.py -f students.csv -a validation
+```
+ 
+## Python Library Usage
 
 ### Methods
 
