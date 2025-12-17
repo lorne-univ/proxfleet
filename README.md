@@ -57,18 +57,55 @@ student_name;student_firstname;student_login;target_host;vm_name;template_name;p
 python bulk_vm_management_main.py -f 'file.csv' -a 'action' [options]
 ```
 
+## CLI Arguments Reference
+
+### Required Arguments
+
+| Argument | Short | Description | Example |
+|----------|-------|-------------|---------|
+| `--file` | `-f` | Path to the CSV file | `-f students.csv` |
+| `--action` | `-a` | Action to perform (see table below) | `-a validation` |
+
+### Optional Arguments
+
+| Argument | Short | Description | Default | Example |
+|----------|-------|-------------|---------|---------|
+| `--debug` | - | Debug level: `none`, `info`, `debug` | `info` | `--debug debug` |
+
+### Authentication Arguments
+
+#### Common
+
+| Argument | Short | Description | Env Variable | Example |
+|----------|-------|-------------|--------------|---------|
+| `--user` | `-u` | Proxmox username (e.g., `root@pam`) | `PROXMOX_USER` | `-u root@pam` |
+
+#### Password Authentication
+
+| Argument | Short | Description | Env Variable | Example |
+|----------|-------|-------------|--------------|---------|
+| `--password` | `-p` | Proxmox password | `PROXMOX_PASSWORD` | `-p myPassword123` |
+
+#### Token Authentication
+
+| Argument | Short | Description | Env Variable | Example |
+|----------|-------|-------------|--------------|---------|
+| `--use-token` | - | Enable token authentication (flag) | `PROXMOX_USE_TOKEN` | `--use-token` |
+| `--token-name` | - | API token name (only part after `!`) | `PROXMOX_TOKEN_NAME` | `--token-name token` |
+| `--token-value` | - | API token secret value | `PROXMOX_TOKEN_VALUE` | `--token-value xxx-xxx-xxx` |
+
 ### Available Actions
 
-| Action | Description | Updates CSV |
-|--------|-------------|-------------|
-| `validation` | Validate CSV before any operation | No |
-| `clone` | Clone VMs from templates | Yes (status, vm_name, newid) |
-| `network_bridge` | Configure network bridges | No |
-| `start` | Start VMs | Yes (status) |
-| `stop` | Stop VMs | Yes (status) |
-| `delete` | Delete VMs permanently | Yes (status, ipv4, newid) |
-| `management_ip` | Retrieve management IPs from VMs | Yes (ipv4) |
-| `deployment` | Full workflow (validation → clone → network → start → IPs) | Yes (all) |
+| Action | Description | CSV Updates | Required VM State |
+|--------|-------------|-------------|-------------------|
+| `validation` | Validate CSV format and configuration | None | N/A |
+| `clone` | Clone VMs from templates | status, vm_name, newid | N/A |
+| `network_bridge` | Configure network bridges (net0, net1) | None | Any |
+| `start` | Start stopped VMs | status | stopped |
+| `stop` | Stop running VMs (hard power-off) | status | running |
+| `delete` | Delete VMs permanently | status, ipv4, newid | stopped |
+| `management_ip` | Retrieve management IP addresses | ipv4 | running |
+| `deployment` | Full workflow (validation → clone → network → start → IPs) | All | N/A |
 
 ### Password Authentication
 
