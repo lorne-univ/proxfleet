@@ -48,7 +48,13 @@ The program detects the delimiter (`;` by default, or `,`).
 ```
 student_name;student_firstname;student_login;target_host;vm_name;template_name;pool;storage;newid;net0;net1;ipv4;status
 ```
+csv file generated with excel utf-8 format
 
+- net0 : vmbrx
+- net1 : vmbry
+- ipv4 : management ip 192.168.140.0/23 or 192.168.170.0/24 or 192.168.176.0/24, completed after the vm started
+- status : cloned | started | stopped
+  
 ## How to use
 
 ### Environment Variables Authentication
