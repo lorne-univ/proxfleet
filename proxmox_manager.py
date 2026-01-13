@@ -4,14 +4,32 @@ from proxmoxer import ProxmoxAPI
 
 
 class ProxmoxManager:
-    def __init__(self, host, proxmox_admin, proxmox_admin_password):
+    def __init__(self, proxmox_host, proxmox_user, proxmox_password=None, use_token=False, token_name=None, token_value=None, verify_ssl=True):
         """
-        user: user@pam //admin user 'root@pam'
-        password: password
-        host: proxmox server hostname or IP
+        proxmox_host: Proxmox server hostname or IP
+        proxmox_user: user@pam (e.g., 'root@pam')
+        proxmox_password: password for classic authentication
+        use_token: if True, use token authentication instead of password
+        token_name: API token name (required if use_token=True)
+        token_value: API token secret (required if use_token=True)
+        verify_ssl: verify SSL certificates (default: True)
         """
-        self.host = host
-        self.proxmox = ProxmoxAPI(host, user=proxmox_admin, password=proxmox_admin_password, verify_ssl=True)
+        if use_token:
+            if not token_name or not token_value:
+                logging.error("Token authentication requires both 'token_name' and 'token_value'")
+                raise ValueError("Token authentication requires both 'token_name' and 'token_value'")
+        else:
+            if not proxmox_password:
+                logging.error("Password authentication requires 'proxmox_password'")
+                raise ValueError("Password authentication requires 'proxmox_password'")
+
+        self.host = proxmox_host
+        if use_token:
+            logging.debug(f"Connecting to {proxmox_host} using token authentication (user: {proxmox_user})")
+            self.proxmox = ProxmoxAPI(proxmox_host, user=proxmox_user, token_name=token_name, token_value=token_value, verify_ssl=verify_ssl)
+        else:
+            logging.debug(f"Connecting to {proxmox_host} using password authentication (user: {proxmox_user})")
+            self.proxmox = ProxmoxAPI(proxmox_host, user=proxmox_user, password=proxmox_password, verify_ssl=verify_ssl)
 
     def list_vms(self):
         """

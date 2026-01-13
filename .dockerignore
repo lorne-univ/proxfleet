@@ -1,0 +1,76 @@
+nano .dockerignore
+```
+
+Copie-colle ce contenu :
+```
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+*_test.py
+test_*.py
+tests/
+
+# Documentation (keep only README)
+*.md
+!README.md
+docs/
+
+# Environment files (IMPORTANT - SECURITY)
+.env
+.env.*
+*.env
+proxmox.env
+secrets/
+
+# CSV files (mounted as volumes)
+*.csv
+
+# Log files
+*.log
+logs/
+
+# Docker files (not needed in image)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Backup files
+*~
+*.bak
+*.backup
+
+# CI/CD
+.gitlab-ci.yml
+.github/

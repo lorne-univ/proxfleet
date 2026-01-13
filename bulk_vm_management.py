@@ -7,13 +7,16 @@ from proxmox_vm import ProxmoxVM
 from proxmox_csv import ProxmoxCSV
 
 
-def load_csv_and_connections(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
+def load_csv_and_connections(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str = None, use_token: bool = False, token_name: str = None, token_value: str = None):
     """
     Load CSV file, YAML configuration, and establish Proxmox connections.
     csv_path: file path (csv file)
     config_yaml: file path (proxmox server hostname)
     proxmox_user: user@pam // admin: 'root@pam'
-    proxmox_password: password
+    proxmox_password: password (optional if use_token=True)
+    use_token: if True, use token authentication
+    token_name: API token name (required if use_token=True)
+    token_value: API token value (required if use_token=True)
     return: tuple (csv_handler, delimiter, rows, connections) or (None, None, None, None) if critical error
     """
     # 1. Load CSV data
@@ -38,7 +41,7 @@ def load_csv_and_connections(csv_path: str, config_yaml: str, proxmox_user: str,
 
     # 3. Prepare Proxmox connections
     logging.debug("[LOAD] Preparing Proxmox connections.")
-    connections = {"user": proxmox_user, "password": proxmox_password}
+    connections = {"user": proxmox_user, "password": proxmox_password, "use_token": use_token, "token_name": token_name, "token_value": token_value}
     unique_hosts = set(row["target_host"] for row in rows if row.get("target_host"))
 
     for target_host in unique_hosts:
@@ -52,7 +55,7 @@ def load_csv_and_connections(csv_path: str, config_yaml: str, proxmox_user: str,
             continue
 
         try:
-            manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
+            manager = ProxmoxManager(proxmox_host=proxmox_host, proxmox_user=proxmox_user, proxmox_password=proxmox_password, use_token=use_token, token_name=token_name, token_value=token_value)
             connections[target_host] = {"manager": manager, "proxmox_host": proxmox_host}
             logging.debug(f"Connected to {target_host} ({proxmox_host})")
         except Exception as e:
@@ -61,13 +64,16 @@ def load_csv_and_connections(csv_path: str, config_yaml: str, proxmox_user: str,
     logging.debug(f"[LOAD] Connections ready: {len(connections) - 2} hosts connected.")
     return csv_handler, delimiter, rows, connections
 
-def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
+def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_password: str = None, use_token: bool = False, token_name: str = None, token_value: str = None):
     """
     Validate the content of a CSV file (before cloning VMs).
     input_csv: file path (csv file)
     config_yaml: file path (proxmox server hostname)
     proxmox_user: user@pam // admin: 'root@pam'
-    proxmox_password: password
+    proxmox_password: password (optional if use_token=True)
+    use_token: if True, use token authentication
+    token_name: API token name (required if use_token=True)
+    token_value: API token value (required if use_token=True)
     return: tuple[bool, list[dict]] â†’ if OK (True, []), else (False, [{"line": X, "errors": [list of failed fields]}])
     """
     logging.debug(f"Starting CSV validation for file: {input_csv}")
@@ -140,8 +146,8 @@ def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
         if target_host not in connections:
             try:
                 logging.debug(f"Connecting to {proxmox_host} as {proxmox_user}")
-                manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
-                vm_helper = ProxmoxVM(proxmox_host, proxmox_user, proxmox_password, 0)
+                manager = ProxmoxManager(proxmox_host=proxmox_host, proxmox_user=proxmox_user, proxmox_password=proxmox_password, use_token=use_token, token_name=token_name, token_value=token_value)
+                vm_helper = ProxmoxVM(proxmox_host=proxmox_host, proxmox_user=proxmox_user, proxmox_password=proxmox_password, vmid=0, use_token=use_token, token_name=token_name, token_value=token_value)
                 connections[target_host] = {"manager": manager, "vm": vm_helper}
                 logging.debug(f"Connection established for host {target_host}")
             except Exception as e:
@@ -201,20 +207,23 @@ def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
         logging.debug("CSV validation successful. All entries are valid.")
         return True, []
 
-def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
+def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_password: str = None, use_token: bool = False, token_name: str = None, token_value: str = None):
     """
     Clone all VMs defined in the CSV file that have an empty status.
     Updates the 'status' column with 'cloned' or 'error'.
     input_csv: file path (csv file)
     config_yaml: file path (proxmox server hostname)
     proxmox_user: user@pam // admin: 'root@pam'
-    proxmox_password: password
+    proxmox_password: password (optional if use_token=True)
+    use_token: if True, use token authentication
+    token_name: API token name (required if use_token=True)
+    token_value: API token value (required if use_token=True)
     return: list[bool] - True if clone succeeded, False otherwise (one per CSV row)
     """  
     logging.debug(f"Starting VM cloning for file: {input_csv}")
 
     # 1. Load CSV, config and connections
-    csv_handler, delimiter, rows, connections = load_csv_and_connections(input_csv, config_yaml, proxmox_user, proxmox_password)
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(input_csv, config_yaml, proxmox_user, proxmox_password, use_token, token_name, token_value)
     if rows is None:
         return []
     results_map = {}
@@ -253,7 +262,7 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
                     continue
         logging.debug(f"[{i+1}/{len(rows)}] VM name determined: {vm_name}")
 
-        vm_temp = ProxmoxVM(proxmox_host, connections["user"], connections["password"], 0)
+        vm_temp = ProxmoxVM(proxmox_host=proxmox_host, proxmox_user=connections["user"], proxmox_password=connections.get("password"), vmid=0, use_token=connections.get("use_token", False), token_name=connections.get("token_name"), token_value=connections.get("token_value"))
         template_name = row["template_name"]
         template_found, template_vmid = vm_temp.search_name(template_name, template=True)
 
@@ -289,7 +298,7 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
             rows[i]["status"] = "error"
             continue
 
-        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], template_vmid)
+        vm_helper = ProxmoxVM(proxmox_host=proxmox_host, proxmox_user=connections["user"], proxmox_password=connections.get("password"), vmid=template_vmid, use_token=connections.get("use_token", False), token_name=connections.get("token_name"), token_value=connections.get("token_value"))
         vm_helper.template_vm = template_vmid
         vm_helper.newid = newid
         vm_helper.name_vm = vm_name
@@ -401,20 +410,23 @@ async def _monitor_clone_task(clone_info, check_interval=5, timeout=900):
             logging.debug(f"[{target_host}] {vm_name} still cloning... ({int(elapsed)}s)")
         await asyncio.sleep(check_interval)
 
-def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
+def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str = None, use_token: bool = False, token_name: str = None, token_value: str = None):
     """
     Start all VMs defined in the CSV file that are stopped or cloned.
     Updates the 'status' column with 'running' or 'error'.
     csv_path: path to the CSV file containing VM configurations
     config_yaml: path to the YAML configuration file with server details
     proxmox_user: Proxmox username (e.g., 'root@pam')
-    proxmox_password: Proxmox password
+    proxmox_password: Proxmox password (optional if use_token=True)
+    use_token: if True, use token authentication
+    token_name: API token name (required if use_token=True)
+    token_value: API token value (required if use_token=True)
     return: list[bool] - True if start succeeded, False otherwise (one per CSV row)
     """
     logging.debug("Starting VMs from CSV")
 
     # 1. Load CSV, config and connections
-    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password, use_token, token_name, token_value)
     if rows is None:
         return []
     results_map = {}
@@ -445,7 +457,7 @@ def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwo
             continue
 
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
+        vm_helper = ProxmoxVM(proxmox_host=proxmox_host, proxmox_user=connections["user"], proxmox_password=connections.get("password"), vmid=newid, use_token=connections.get("use_token", False), token_name=connections.get("token_name"), token_value=connections.get("token_value"))
         exists, _ = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")
@@ -506,20 +518,23 @@ def start_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwo
     logging.debug(f"Failed: {failed}")
     return [results_map.get(i, False) for i in range(len(rows))]
 
-def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
+def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str = None, use_token: bool = False, token_name: str = None, token_value: str = None):
     """
     Stop all VMs defined in the CSV file that are running.
     Updates the 'status' column with 'stopped' or 'error'.
     csv_path: path to the CSV file containing VM configurations
     config_yaml: path to the YAML configuration file with server details
     proxmox_user: Proxmox username (e.g., 'root@pam')
-    proxmox_password: Proxmox password
+    proxmox_password: Proxmox password (optional if use_token=True)
+    use_token: if True, use token authentication
+    token_name: API token name (required if use_token=True)
+    token_value: API token value (required if use_token=True)
     return: list[bool] - True if stop succeeded, False otherwise (one per CSV row)
     """
     logging.debug("Stopping VMs from CSV")
 
     # 1. Load CSV, config and connections
-    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password, use_token, token_name, token_value)
     if rows is None:
         return []
     results_map = {}
@@ -550,7 +565,7 @@ def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwor
             continue
 
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
+        vm_helper = ProxmoxVM(proxmox_host=proxmox_host, proxmox_user=connections["user"], proxmox_password=connections.get("password"), vmid=newid, use_token=connections.get("use_token", False), token_name=connections.get("token_name"), token_value=connections.get("token_value"))
         exists, _ = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")
@@ -611,20 +626,23 @@ def stop_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passwor
     logging.debug(f"Failed: {failed}")
     return [results_map.get(i, False) for i in range(len(rows))]
 
-def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
+def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str = None, use_token: bool = False, token_name: str = None, token_value: str = None):
     """
     Delete all VMs defined in the CSV file.
     Updates the CSV by clearing 'status' and 'ipv4' columns on success.
     csv_path: path to the CSV file containing VM configurations
     config_yaml: path to the YAML configuration file with server details
     proxmox_user: Proxmox username (e.g., 'root@pam')
-    proxmox_password: Proxmox password
+    proxmox_password: Proxmox password (optional if use_token=True)
+    use_token: if True, use token authentication
+    token_name: API token name (required if use_token=True)
+    token_value: API token value (required if use_token=True)
     return: list[bool] - True if delete succeeded, False otherwise (one per CSV row)
     """
     logging.debug("Deleting VMs from CSV")
 
     # 1. Load CSV, config and connections
-    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password, use_token, token_name, token_value)
     if rows is None:
         return []
     results_map = {}
@@ -655,7 +673,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
             continue
         
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
+        vm_helper = ProxmoxVM(proxmox_host=proxmox_host, proxmox_user=connections["user"], proxmox_password=connections.get("password"), vmid=newid, use_token=connections.get("use_token", False), token_name=connections.get("token_name"), token_value=connections.get("token_value"))
         exists, actual_vm_name = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host} - marking as success")
@@ -720,7 +738,7 @@ def delete_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_passw
     logging.debug(f"Failed: {failed}")
     return [results_map.get(i, False) for i in range(len(rows))]
 
-def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
+def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str = None, use_token: bool = False, token_name: str = None, token_value: str = None):
     """
     Update network bridge configuration for VMs defined in the CSV file.
     Reads net0 and net1 values from CSV and applies them to the corresponding VMs.
@@ -729,13 +747,16 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
     csv_path: path to the CSV file containing VM configurations
     config_yaml: path to the YAML configuration file with server details
     proxmox_user: Proxmox username (e.g., 'root@pam')
-    proxmox_password: Proxmox password
+    proxmox_password: Proxmox password (optional if use_token=True)
+    use_token: if True, use token authentication
+    token_name: API token name (required if use_token=True)
+    token_value: API token value (required if use_token=True)
     return: list[bool] - True if update succeeded, False otherwise (one per CSV row)
     """
     logging.debug("Updating network bridges from CSV")
 
     # 1. Load CSV, config and connections
-    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password, use_token, token_name, token_value)
     if rows is None:
         return []
     results_map = {}
@@ -771,7 +792,7 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
             continue
 
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
+        vm_helper = ProxmoxVM(proxmox_host=proxmox_host, proxmox_user=connections["user"], proxmox_password=connections.get("password"), vmid=newid, use_token=connections.get("use_token", False), token_name=connections.get("token_name"), token_value=connections.get("token_value"))
         exists, _ = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")
@@ -837,7 +858,7 @@ def networkbridge_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmo
     logging.debug("=" * 70)
     return [results_map.get(i, False) for i in range(len(rows))]
 
-def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str):
+def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox_password: str = None, use_token: bool = False, token_name: str = None, token_value: str = None):
     """
     Retrieve and store management IP addresses for running VMs defined in the CSV file.
     Only processes VMs with status 'running'. Waits up to 3 minutes per VM for QEMU agent to respond.
@@ -845,13 +866,16 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
     csv_path: path to the CSV file containing VM configurations
     config_yaml: path to the YAML configuration file with server details
     proxmox_user: Proxmox username (e.g., 'root@pam')
-    proxmox_password: Proxmox password
+    proxmox_password: Proxmox password (optional if use_token=True)
+    use_token: if True, use token authentication
+    token_name: API token name (required if use_token=True)
+    token_value: API token value (required if use_token=True)
     return: list[bool] - True if IP retrieved successfully, False otherwise (one per CSV row)
     """
     logging.debug("Retrieving management IP addresses from running VMs (sequential mode)")
 
     # 1. Load CSV, config and connections
-    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password)
+    csv_handler, delimiter, rows, connections = load_csv_and_connections(csv_path, config_yaml, proxmox_user, proxmox_password, use_token, token_name, token_value)
     if rows is None:
         return []
     results_map = {}
@@ -884,7 +908,7 @@ def managementip_csv(csv_path: str, config_yaml: str, proxmox_user: str, proxmox
             continue
 
         proxmox_host = connections[target_host]["proxmox_host"]
-        vm_helper = ProxmoxVM(proxmox_host, connections["user"], connections["password"], newid)
+        vm_helper = ProxmoxVM(proxmox_host=proxmox_host, proxmox_user=connections["user"], proxmox_password=connections.get("password"), vmid=newid, use_token=connections.get("use_token", False), token_name=connections.get("token_name"), token_value=connections.get("token_value"))
         exists, _ = vm_helper.search_vmid(newid)
         if not exists:
             logging.error(f"[{i+1}/{len(rows)}] VM {vm_name} (VMID: {newid}) not found on {target_host}")

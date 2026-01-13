@@ -4,12 +4,15 @@ from proxmox_manager import ProxmoxManager
 
 
 class ProxmoxVM:
-    def __init__(self, proxmox_host, proxmox_user, proxmox_password, vmid):
+    def __init__(self, proxmox_host, proxmox_user, proxmox_password=None, vmid=0, use_token=False, token_name=None, token_value=None):
         """
-        user: user@pam // admin: 'root@pam'
-        password: password
-        host: proxmox server hostname or IP
-        vmid: id of the VM
+        proxmox_host: Proxmox server hostname or IP
+        proxmox_user: user@pam (e.g., 'root@pam')
+        proxmox_password: password for classic authentication
+        vmid: VM ID
+        use_token: if True, use token authentication instead of password
+        token_name: API token name (required if use_token=True)
+        token_value: API token secret (required if use_token=True)
         ipv4_vm: detected management IPv4 address
         net0_vm / net1_vm: network bridges (e.g. vmbr140)
         """
@@ -21,7 +24,7 @@ class ProxmoxVM:
         self.status_vm = str()
         self.storage_vm = str()
         self.ipv4_vm = str()
-        self.manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password)
+        self.manager = ProxmoxManager(proxmox_host, proxmox_user, proxmox_password, use_token=use_token, token_name=token_name, token_value=token_value)
 
     def start(self):
         """

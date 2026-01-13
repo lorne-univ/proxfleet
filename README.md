@@ -11,13 +11,14 @@ The Proxmox API documentation is available here: [Proxmox API Documentation](htt
 
 ### Classes
 
+- **ProxmoxCSV** - Handles CSV file parsing and writing
 - **ProxmoxManager** - Handles connection and cluster-level operations (pools, storage, bridges, tasks)
 - **ProxmoxVM** - Handles VM-level operations (clone, start, stop, delete, network, QEMU agent)
-- **ProxmoxCSV** - Handles CSV file parsing and writing
 
 ### Bulk Operations
 
 - **bulk_vm_management** - High-level functions to manage multiple VMs from a CSV file
+- **bulk_vm_management_main** - CLI interface for bulk operations
 
 ### Virtual environment
 
@@ -41,14 +42,6 @@ Librairies for the projet
 pip install -r requirements.txt
 ```
 
-### Environment variables
-
-To set in .env file
-```
-PROXMOX_USER=root@pam
-PROXMOX_PASSWORD=XXXX
-```
-
 ### CSV Template
 
 The program detects the delimiter (`;` by default, or `,`).
@@ -58,18 +51,186 @@ student_name;student_firstname;student_login;target_host;vm_name;template_name;p
 
 ## How to use
 
-### Setup
+### Environment Variables Authentication
 
-```python
-import os
-from dotenv import load_dotenv
+Create a `.env` file:
 
-load_dotenv()
-CONFIG_YAML = "config.yaml"
-INPUT_CSV = "test.csv"
-user = os.getenv('PROXMOX_USER')
-password = os.getenv('PROXMOX_PASSWORD')
+**For Password:**
+```bash
+export PROXMOX_USER=root@pam
+export PROXMOX_PASSWORD=myPassword123
 ```
+
+**For Token:**
+```bash
+export PROXMOX_USER=root@pam
+export PROXMOX_USE_TOKEN=true
+export PROXMOX_TOKEN_NAME=token
+export PROXMOX_TOKEN_VALUE=123456789ABCDEF
+```
+
+### Basic syntax
+
+```bash
+python bulk_vm_management_main.py -f 'file.csv' -a 'action' [options]
+```
+
+## Docker Reference
+
+### Prerequisites
+
+- Docker installed on your system
+
+- All project files in the proxfleet/ directory
+
+### Build the Docker Image
+
+Navigate to the project directory and build the image:
+
+```bash
+cd proxfleet/
+docker build --platform linux/amd64 -t proxfleet:latest .
+```
+
+### Verify the Build
+
+Check that the image was created successfully:
+
+```bash
+docker images | grep proxfleet
+```
+
+### Test the Image
+
+```bash
+docker run --rm proxfleet:latest --help
+```
+
+### Running with Docker
+
+```bash
+docker run --rm \
+  --platform linux/amd64 \
+  --network host \
+  -v $(pwd)/YOUR_FILE.csv:/app/YOUR_FILE.csv:rw \
+  -e PROXMOX_USER=your_user@pam \
+  -e PROXMOX_USE_TOKEN=true \
+  -e PROXMOX_TOKEN_NAME=your_token_name \
+  -e PROXMOX_TOKEN_VALUE=your_token_value \
+  proxfleet:latest \
+  -f YOUR_FILE.csv -a ACTION --debug LEVEL
+```
+
+**Explanation of flags:**
+
+- **--rm** : *Automatically remove container after execution*
+- **--platform linux/amd64** : *Ensure AMD64 architecture compatibility*
+- **--network host** : *Use host network (required to access Proxmox servers)*
+- **-v $(pwd)/file.csv:/app/file.csv:rw** : *Mount CSV file with read-write permissions*
+- **-e VARIABLE=value** : *Set environment variables for authentication*
+- **-f file.csv** : *CSV file to process (inside container path)*
+- **-a ACTION** : *Action to perform*
+- **--debug LEVEL** : *Debug level (none, info, debug)*
+
+### Docker Examples
+
+**Example 1: Validate CSV**
+
+```bash
+docker run --rm --platform linux/amd64 --network host -v $(pwd)/test.csv:/app/test.csv:rw -e PROXMOX_USER=root@pam -e PROXMOX_USE_TOKEN=true -e PROXMOX_TOKEN_NAME=token -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx proxfleet:latest -f test.csv -a validation
+```
+
+**Example 2: Full Deployment Workflow**
+
+```bash
+docker run --rm --platform linux/amd64 --network host -v $(pwd)/test.csv:/app/test.csv:rw -e PROXMOX_USER=root@pam -e PROXMOX_USE_TOKEN=true -e PROXMOX_TOKEN_NAME=token -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx proxfleet:latest -f test.csv -a deployment
+```
+
+**Example 3: Stop VMs**
+
+```bash
+docker run --rm --platform linux/amd64 --network host -v $(pwd)/test.csv:/app/test.csv:rw -e PROXMOX_USER=root@pam -e PROXMOX_USE_TOKEN=true -e PROXMOX_TOKEN_NAME=token -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx proxfleet:latest -f test.csv -a stop
+```
+
+**Example 4: Delete VMs**
+
+```bash
+docker run --rm --platform linux/amd64 --network host -v $(pwd)/test.csv:/app/test.csv:rw -e PROXMOX_USER=root@pam -e PROXMOX_USE_TOKEN=true -e PROXMOX_TOKEN_NAME=token -e PROXMOX_TOKEN_VALUE=xxx-xxx-xxx proxfleet:latest -f test.csv -a delete
+```
+
+## CLI Arguments Reference
+
+### Required Arguments
+
+| Argument | Short | Description | Example |
+|----------|-------|-------------|---------|
+| `--file` | `-f` | Path to the CSV file | `-f students.csv` |
+| `--action` | `-a` | Action to perform (see table below) | `-a validation` |
+
+### Optional Arguments
+
+| Argument | Short | Description | Default | Example |
+|----------|-------|-------------|---------|---------|
+| `--debug` | - | Debug level: `none`, `info`, `debug` | `info` | `--debug debug` |
+
+### Authentication Arguments
+
+#### Common
+
+| Argument | Short | Description | Env Variable | Example |
+|----------|-------|-------------|--------------|---------|
+| `--user` | `-u` | Proxmox username (e.g., `root@pam`) | `PROXMOX_USER` | `-u root@pam` |
+
+#### Password Authentication
+
+| Argument | Short | Description | Env Variable | Example |
+|----------|-------|-------------|--------------|---------|
+| `--password` | `-p` | Proxmox password | `PROXMOX_PASSWORD` | `-p myPassword123` |
+
+#### Token Authentication
+
+| Argument | Short | Description | Env Variable | Example |
+|----------|-------|-------------|--------------|---------|
+| `--use-token` | - | Enable token authentication (flag) | `PROXMOX_USE_TOKEN` | `--use-token` |
+| `--token-name` | - | API token name (only part after `!`) | `PROXMOX_TOKEN_NAME` | `--token-name token` |
+| `--token-value` | - | API token secret value | `PROXMOX_TOKEN_VALUE` | `--token-value xxx-xxx-xxx` |
+
+### Available Actions
+
+| Action | Description | CSV Updates | Required VM State |
+|--------|-------------|-------------|-------------------|
+| `validation` | Validate CSV format and configuration | None | N/A |
+| `clone` | Clone VMs from templates | status, vm_name, newid | N/A |
+| `network_bridge` | Configure network bridges (net0, net1) | None | Any |
+| `start` | Start stopped VMs | status | stopped |
+| `stop` | Stop running VMs (hard power-off) | status | running |
+| `delete` | Delete VMs permanently | status, ipv4, newid | stopped |
+| `management_ip` | Retrieve management IP addresses | ipv4 | running |
+| `deployment` | Full workflow (validation → clone → network → start → IPs) | All | N/A |
+
+### Password Authentication
+
+```bash
+python bulk_vm_management_main.py \
+  -f students.csv \
+  -u root@pam \
+  -p myPassword123 \
+  -a validation
+```
+
+### Token Authentication
+
+```bash
+python bulk_vm_management_main.py \
+  -f students.csv \
+  -u root@pam \
+  --use-token \
+  --token-name token \
+  --token-value xxx-xxx-xxx \
+  -a validation
+```
+ 
+## Python Library Usage
 
 ### Methods
 
