@@ -55,7 +55,7 @@ csv file generated with excel : CSV UTF-8 (délimité par des virgules)
 - student_login : mandatory
 - target_host : pm-servX mandatory
 - pool : by default student_login ???
-- storage : ??? 
+- storage : optionnal, use by default data.⚠️ For data2.  
 - net0 : vmbrx
 - net1 : vmbry
 - ipv4 : management ip 192.168.140.0/23 or 192.168.170.0/24 or 192.168.176.0/24, completed after the vm started
