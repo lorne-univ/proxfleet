@@ -53,6 +53,7 @@ csv file generated with excel : CSV UTF-8 (délimité par des virgules)
 - student_name : optionnal
 - student_firstname : optional
 - student_login : mandatory
+- target_host : pm-servX mandatory
 - pool : by default student_login ???
 - storage : ??? 
 - net0 : vmbrx
