@@ -172,7 +172,7 @@ def check_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
             line_errors.append("pool")
 
         storage = (row.get("storage") or "").strip()
-        if not storage or not manager.check_storage_exists(storage):
+        if storage and not manager.check_storage_exists(storage):
             line_errors.append("storage")
 
         newid = (row.get("newid") or "").strip()
@@ -303,7 +303,16 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
         vm_helper.newid = newid
         vm_helper.name_vm = vm_name
         vm_helper.pool_vm = row["pool"]
-        vm_helper.storage_vm = row["storage"]
+        storage_csv = (row.get("storage") or "").strip()
+        if storage_csv:
+            vm_helper.storage_vm = storage_csv
+        else:
+            if manager.check_storage_exists("data2"):
+                vm_helper.storage_vm = "data2"
+                logging.debug(f"[{i+1}/{len(rows)}] No storage in CSV, using 'data2'")
+            else:
+                vm_helper.storage_vm = "data"
+                logging.debug(f"[{i+1}/{len(rows)}] No storage in CSV, using 'data' (data2 not found)")
         logging.debug(f"[{i+1}/{len(rows)}] Launching clone: {vm_name} (template: {template_name}, newid: {newid})")
 
         upid = vm_helper.clone_vm()
