@@ -310,9 +310,14 @@ def clone_csv(input_csv: str, config_yaml: str, proxmox_user: str, proxmox_passw
             if manager.check_storage_exists("data2"):
                 vm_helper.storage_vm = "data2"
                 logging.debug(f"[{i+1}/{len(rows)}] No storage in CSV, using 'data2'")
-            else:
+            elif manager.check_storage_exists("data"):
                 vm_helper.storage_vm = "data"
                 logging.debug(f"[{i+1}/{len(rows)}] No storage in CSV, using 'data' (data2 not found)")
+            else:
+                logging.error(f"[{i+1}/{len(rows)}] No valid storage found (neither 'data2' nor 'data') for {vm_name}")
+                results_map[i] = False
+                rows[i]["status"] = "error"
+                continue
         logging.debug(f"[{i+1}/{len(rows)}] Launching clone: {vm_name} (template: {template_name}, newid: {newid})")
 
         upid = vm_helper.clone_vm()
